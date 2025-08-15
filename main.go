@@ -14,31 +14,28 @@ import (
 )
 
 func main() {
-	// 加载环境变量
 	if err := godotenv.Load(); err != nil {
 		log.Println("Warning: .env file not found")
 	}
 
-	// 初始化配置（包含日志配置）
 	cfg := config.Load()
-	// 初始化数据库
-	if err := config.InitDB(cfg.DBPath); err != nil {
+	if err := config.InitDB(cfg); err != nil {
 		log.Fatal("Failed to initialize database:", err)
 	}
+	if err := config.InitRedis(cfg.Redis); err != nil {
+		log.Println("Failed to initialize redis:", err)
+	}
+	if err := service.HandleInit(); err != nil {
+		log.Fatal("Failed to initialize data:", err)
+	}
 
-	// 初始化服务
-	authService := service.NewAuthService()
-
-	// 设置 Gin 模式
 	gin.SetMode(cfg.GinMode)
-	// 为 Gin 设置日志输出
-	writer := config.GetLogger(cfg)
+	writer := config.InitLogger(cfg)
 	gin.DefaultWriter = writer
 	gin.DefaultErrorWriter = writer
 
 	r := gin.Default()
 
-	// 配置 CORS
 	r.Use(cors.New(cors.Config{
 		AllowHeaders: []string{"*"},
 		AllowOrigins: []string{"*"},
@@ -52,10 +49,8 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	// 使用统一的路由和静态文件处理中间件
 	r.Use(handle.StaticRouteHandle(cfg))
-
-	// 管理功能路由（需要管理员权限）
+	authService := service.NewAuthService()
 	compatibleV1 := r.Group("/compatible-v1", auth.APIKeyMiddleware(authService))
 	{
 		r := handle.NewRelayHandle()
@@ -82,19 +77,17 @@ func main() {
 			rootApi.POST("/pricing-plans", s.GetPricingPlans)
 		}
 
-		// 需要认证的路由
 		basicApi := api.Group("/", auth.AuthMiddleware(authService))
 		{
 			b := handle.NewBasicHandle()
+			basicApi.GET("/profile", b.GetUserProfile)
 			basicApi.PUT("/profile", b.SetUserProfile)
-			basicApi.POST("/profile", b.GetUserProfile)
 			basicApi.POST("/usage", b.GetUserUsage)
 			basicApi.POST("/orders", b.GetUserOrders)
 			basicApi.POST("/api-keys", b.GetUserAPIKeys)
 			basicApi.POST("/regenerate", b.RegenerateKey)
 		}
 
-		// 订单路由
 		orderApi := api.Group("/order", auth.AuthMiddleware(authService))
 		{
 			o := handle.NewOrderHandler()
@@ -105,7 +98,6 @@ func main() {
 			orderApi.POST("/qrcode/:id", o.ShowPaymentQrcode)
 		}
 
-		// 管理员路由
 		adminApi := api.Group("/admin", auth.AdminMiddleware(authService))
 		{
 			h := handle.NewAdminHandle()
@@ -122,7 +114,6 @@ func main() {
 			adminApi.POST("/orders", h.GetOrders)
 		}
 
-		// 设置路由
 		setupApi := api.Group("/setup", auth.AdminMiddleware(authService))
 		{
 			s := handle.NewSetupHandler()
@@ -131,7 +122,6 @@ func main() {
 		}
 	}
 
-	// 启动服务器
 	log.Printf("Server starting on port %s", cfg.AppPort)
 	log.Printf("Admin panel: http://localhost:%s", cfg.AppPort)
 	if err := r.Run(":" + cfg.AppPort); err != nil {

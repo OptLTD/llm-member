@@ -10,16 +10,16 @@ import (
 type UserModel struct {
 	ID uint64 `json:"id" gorm:"primarykey"`
 
-	Email    string `json:"email" gorm:"uniqueIndex;not null"`
-	Username string `json:"username" gorm:"uniqueIndex;not null"`
-	Password string `json:"-" gorm:"not null"` // 不在 JSON 中返回密码
-	APIKey   string `json:"api_key" gorm:"uniqueIndex;not null"`
+	Email    string `json:"email" gorm:"type:varchar(256);index;not null"`
+	Username string `json:"username" gorm:"type:varchar(128);index;not null"`
+	Password string `json:"password" gorm:"type:varchar(64);not null"` // 不在 JSON 中返回密码
+	APIKey   string `json:"api_key" gorm:"type:varchar(68);index;not null"`
 	IsActive bool   `json:"is_active" gorm:"default:true"`
 	Verified bool   `json:"verified" gorm:"default:false"`
-	CurrRole Role   `json:"curr_role" gorm:"default:user"`
+	UserRole Role   `json:"user_role" gorm:"default:user"`
 
 	// 当前套餐、过期时间
-	CurrPlan  PayPlan    `json:"curr_plan" gorm:"type:varchar(20)"` // 用户套餐
+	UserPlan  PayPlan    `json:"user_plan" gorm:"type:varchar(20)"` // 用户套餐
 	ExpiredAt *time.Time `json:"expired_at" gorm:"default:null"`    // 过期时间
 
 	// 使用统计
@@ -84,10 +84,44 @@ type UpdateUserRequest struct {
 	MonthlyLimit *int64 `json:"monthly_limit,omitempty"`
 }
 
-// UserListResponse 用户列表响应
-type UserListResponse struct {
-	Users []UserModel `json:"users"`
-	Total int64       `json:"total"`
+// UserResponse 用户信息响应
+type UserResponse struct {
+	Email    string  `json:"email"`
+	APIKey   string  `json:"api_key"`
+	Username string  `json:"username"`
+	IsActive bool    `json:"is_active"`
+	Verified bool    `json:"verified"`
+	UserRole Role    `json:"user_role"`
+	UserPlan PayPlan `json:"user_plan"`
+
+	TotalTokens   int64 `json:"total_tokens"`
+	TotalRequests int64 `json:"total_requests"`
+	DailyLimit    int64 `json:"daily_limit"`
+	MonthlyLimit  int64 `json:"monthly_limit"`
+
+	ExpiredAt *time.Time `json:"expired_at"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+// ToUserResponse 将UserModel转换为UserResponse
+func (u *UserModel) ToUserResponse() *UserResponse {
+	return &UserResponse{
+		Email:         u.Email,
+		Username:      u.Username,
+		APIKey:        u.APIKey,
+		IsActive:      u.IsActive,
+		Verified:      u.Verified,
+		UserRole:      u.UserRole,
+		UserPlan:      u.UserPlan,
+		ExpiredAt:     u.ExpiredAt,
+		TotalTokens:   u.TotalTokens,
+		TotalRequests: u.TotalRequests,
+		DailyLimit:    u.DailyLimit,
+		MonthlyLimit:  u.MonthlyLimit,
+		CreatedAt:     u.CreatedAt,
+		UpdatedAt:     u.UpdatedAt,
+	}
 }
 
 // StatsResponse 统计响应结构

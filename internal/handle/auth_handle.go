@@ -52,7 +52,7 @@ func (h *AuthHandle) UserSignUp(c *gin.Context) {
 	}
 
 	// 生成注册 token
-	token, err := h.authService.GenerateSignupToken(signup.Email)
+	token, err := h.authService.GenerateSignupCode(signup.Email)
 	if err != nil {
 		h.authService.DeleteSignup(user)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -83,7 +83,7 @@ func (h *AuthHandle) VerifySignUpCode(c *gin.Context) {
 		return
 	}
 
-	err := h.authService.VerifyEmail(req.Code)
+	err := h.authService.VerifySignupCode(req.Code)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -146,7 +146,7 @@ func (h *AuthHandle) UserSignOut(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader != "" {
 		token := strings.TrimPrefix(authHeader, "Bearer ")
-		h.authService.Logout(token)
+		h.authService.SignOut(token)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "登出成功"})
@@ -176,7 +176,7 @@ func (h *AuthHandle) AdminSignOut(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader != "" {
 		token := strings.TrimPrefix(authHeader, "Bearer ")
-		h.authService.Logout(token)
+		h.authService.SignOut(token)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "登出成功"})

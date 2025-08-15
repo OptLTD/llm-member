@@ -71,7 +71,7 @@ func (h *AdminHandle) UpdateUser(c *gin.Context) {
 		return
 	} else {
 		c.JSON(http.StatusOK, gin.H{
-			"user": user, "message": "用户信息更新成功",
+			"user": user.ToUserResponse(),
 		})
 	}
 }
@@ -87,8 +87,7 @@ func (h *AdminHandle) GenerateAPIKey(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"user": user, "api_key": user.APIKey,
-		"message": "API Key 重新生成成功",
+		"api_key": user.APIKey, "user": user.ToUserResponse(),
 	})
 }
 

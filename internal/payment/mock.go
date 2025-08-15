@@ -27,7 +27,7 @@ func (m *MockPayment) Query(order *model.OrderModel) error {
 	if order.Status == model.PaymentPending {
 		order.Status = model.PaymentSucceed
 		now := time.Now()
-		order.PaidAt = &now
+		order.SucceedAt = &now
 		log.Printf("[mock][%s] payment successful", order.OrderID)
 	}
 	return nil

@@ -89,7 +89,7 @@ func (s *UserService) UpdateUser(req *model.UpdateUserRequest) (*model.UserModel
 	}
 
 	if req.PayPlan != nil {
-		user.CurrPlan = *req.PayPlan
+		user.UserPlan = *req.PayPlan
 	}
 
 	if req.DailyLimit != nil {

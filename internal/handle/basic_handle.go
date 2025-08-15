@@ -40,11 +40,8 @@ func (h *BasicHandle) GetUserProfile(c *gin.Context) {
 		return
 	}
 
-	// 清除敏感信息
-	user.Password = ""
-
 	c.JSON(http.StatusOK, gin.H{
-		"user": user,
+		"user": user.ToUserResponse(),
 	})
 }
 
@@ -82,12 +79,8 @@ func (h *BasicHandle) SetUserProfile(c *gin.Context) {
 		return
 	}
 
-	// 清除敏感信息
-	user.Password = ""
-
 	c.JSON(http.StatusOK, gin.H{
-		"user":    user,
-		"message": "个人资料更新成功",
+		"user": user.ToUserResponse(),
 	})
 }
 
@@ -114,7 +107,7 @@ func (h *BasicHandle) GetUserUsage(c *gin.Context) {
 		"total_requests": user.TotalRequests,
 		"daily_limit":    user.DailyLimit,
 		"monthly_limit":  user.MonthlyLimit,
-		"current_plan":   user.CurrPlan,
+		"current_plan":   user.UserPlan,
 		"period":         period,
 	}
 
@@ -136,10 +129,7 @@ func (h *BasicHandle) GetUserAPIKeys(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"api_key":       user.APIKey,
-		"created_at":    user.CreatedAt,
-		"daily_limit":   user.DailyLimit,
-		"monthly_limit": user.MonthlyLimit,
+		"api_key": user.APIKey,
 	})
 }
 

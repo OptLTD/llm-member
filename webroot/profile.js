@@ -12,7 +12,10 @@ const DataManager = {
   // 加载用户资料
   async loadUserProfile() {
     try {
-      const data = await Utils.apiRequest(`/api/profile`);
+
+      const data = await Utils.apiRequest(
+        `/api/profile`,{ method: "GET" }
+      );
       ProfileApp.user = data.user;
       this.updateProfileUI();
     } catch (error) {
@@ -28,8 +31,7 @@ const DataManager = {
   async updateUserProfile(profileData) {
     try {
       const data = await Utils.apiRequest(`/api/profile`, {
-        method: "PUT",
-        body: JSON.stringify(profileData),
+        method: "PUT", body: JSON.stringify(profileData),
       });
       ProfileApp.user = data.user;
       this.updateProfileUI();
@@ -320,7 +322,7 @@ const DataManager = {
                     </span>
                 </td>
                 <td class="px-6 py-4 text-gray-500">${Utils.formatDate(
-                  order.paid_at
+                  order.succeed_at
                 )}</td>
             `;
 
@@ -455,7 +457,9 @@ async function checkAuth() {
 
   // 验证token有效性
   try {
-    await Utils.apiRequest(`/api/profile`);
+    await Utils.apiRequest(
+      `/api/profile`, { method: "GET" }
+    );
     return true;
   } catch (error) {
     // token无效，已在apiRequest中处理跳转

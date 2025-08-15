@@ -90,9 +90,9 @@ func (p *AlipayPayment) Query(order *model.OrderModel) error {
 		case "TRADE_SUCCESS", "TRADE_FINISHED":
 			order.Status = model.PaymentSucceed
 			log.Printf("[alipay][%s] payment successful", order.OrderID)
-			if order.PaidAt == nil {
+			if order.SucceedAt == nil {
 				now := time.Now()
-				order.PaidAt = &now
+				order.SucceedAt = &now
 			}
 		case "TRADE_CLOSED":
 			order.Status = model.PaymentCanceled

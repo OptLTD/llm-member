@@ -92,7 +92,7 @@ func (s *OrderService) UpdateStatus(orderID string, status string) error {
 
 	if status == string(model.PaymentSucceed) {
 		now := time.Now()
-		updates["paid_at"] = &now
+		updates["succeed_at"] = &now
 	}
 
 	return s.db.Model(&model.OrderModel{}).
@@ -120,7 +120,7 @@ func (s *OrderService) PaySuccess(orderId string) error {
 
 	// 更新订单状态
 	var updateOrder = map[string]any{
-		"status": model.PaymentSucceed, "paid_at": time.Now(),
+		"status": model.PaymentSucceed, "succeed_at": time.Now(),
 	}
 	if err := tx.Model(order).Updates(updateOrder).Error; err != nil {
 		tx.Rollback()
@@ -129,7 +129,7 @@ func (s *OrderService) PaySuccess(orderId string) error {
 
 	// 更新用户套餐
 	var updateUser = map[string]any{
-		"curr_plan":  order.PayPlan,
+		"user_plan":  order.PayPlan,
 		"expired_at": time.Now().AddDate(0, 0, 30),
 	}
 	var query = tx.Model(&model.UserModel{}).Where("id = ?", order.UserID)

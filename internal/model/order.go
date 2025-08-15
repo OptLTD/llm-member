@@ -41,15 +41,15 @@ type OrderResponse struct {
 type OrderModel struct {
 	ID uint64 `json:"id" gorm:"primarykey"`
 
-	OrderID string  `json:"order_id" gorm:"uniqueIndex;not null"`
-	UserID  uint64  `json:"user_id" gorm:"index"`
+	UserID  uint64  `json:"user_id" gorm:"index;not null"`
+	OrderID string  `json:"order_id" gorm:"type:varchar(64);uniqueIndex;not null"`
 	PayPlan PayPlan `json:"pay_plan" gorm:"type:varchar(20)"`
 	Amount  float64 `json:"amount" gorm:"not null"`
 	Method  method  `json:"method" gorm:"type:varchar(20)"`
+	PayURL  string  `json:"payurl"`
+	QRCode  string  `json:"qrcode"`
 
-	PayURL    string     `json:"payurl"`
-	QRCode    string     `json:"qrcode"`
-	PaidAt    *time.Time `json:"paid_at"`
+	SucceedAt *time.Time `json:"succeed_at"`
 	ExpiredAt time.Time  `json:"expired_at"`
 
 	Status OrderStatus `json:"status"` // pending, success, failed, canceled

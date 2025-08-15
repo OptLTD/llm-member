@@ -150,7 +150,7 @@ func (h *OrderHandler) CreatePaymentOrder(c *gin.Context) {
 	}
 	if user.ExpiredAt != nil && user.ExpiredAt.After(time.Now()) {
 		c.JSON(http.StatusOK, gin.H{"error": "您已订阅套餐，不能重复订阅",
-			"plan": user.CurrPlan, "expired_at": user.ExpiredAt,
+			"plan": user.UserPlan, "expired_at": user.ExpiredAt,
 		})
 		return
 	}

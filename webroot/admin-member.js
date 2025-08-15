@@ -144,7 +144,7 @@ class MemberManager {
         body: JSON.stringify({
           username, email, password,
           request_limit: requestLimit,
-          curr_role: isAdmin ? 'admin': 'user',
+          user_role: isAdmin ? 'admin': 'user',
         }),
       });
       successDiv.textContent = `用户创建成功！API Key: ${data.api_key}`;
@@ -260,11 +260,11 @@ class MemberManager {
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    user.curr_role == 'admin'
+                    user.user_role == 'admin'
                       ? "bg-purple-100 text-purple-800"
                       : "bg-gray-100 text-gray-800"
                   }">
-                    ${user.curr_role == 'admin' ? "管理员" : "普通用户"}
+                    ${user.user_role == 'admin' ? "管理员" : "普通用户"}
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
