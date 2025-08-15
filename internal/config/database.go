@@ -72,6 +72,10 @@ func createDefaultAdmin(db *gorm.DB) error {
 		Count(&count); count > 0 {
 		return nil // 已存在管理员，跳过创建
 	}
+	// 没有配置 ADMIN_USERNAME，则不创建
+	if "" == getEnv("ADMIN_USERNAME", "") {
+		return nil
+	}
 
 	// 创建默认管理员
 	expired_at := time.Now().AddDate(99, 0, 0)
@@ -83,7 +87,9 @@ func createDefaultAdmin(db *gorm.DB) error {
 	}
 
 	// 生成密码哈希
-	pass, cost := []byte("admin123"), bcrypt.DefaultCost
+	admin.Username = getEnv("ADMIN_USERNAME", "admin")
+	password := getEnv("ADMIN_PASSWORD", "admin123")
+	pass, cost := []byte(password), bcrypt.DefaultCost
 	if data, err := bcrypt.GenerateFromPassword(pass, cost); err != nil {
 		return fmt.Errorf("failed to hash password: %v", err)
 	} else {
