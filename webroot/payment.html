@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.T.PaymentTitle}} - {{.AppName}}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .plan-card {
+            transition: all 0.3s ease;
+        }
+        .plan-card.selected {
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+        }
+        .payment-method {
+            transition: all 0.3s ease;
+        }
+        .payment-method.selected {
+            border-color: #667eea;
+            background-color: #f0f4ff;
+        }
+        .payment-method.selected .fa-check {
+            color: #667eea !important;
+        }
+        .amount-input {
+            transition: all 0.3s ease;
+        }
+        .amount-input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .qr-code-container {
+            background: linear-gradient(45deg, #f0f4ff, #e8f2ff);
+        }
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        /* 添加按钮禁用状态样式 */
+        #payBtn:disabled {
+            background-color: #9CA3AF !important; /* gray-400 */
+            cursor: not-allowed !important;
+            opacity: 0.6 !important;
+        }
+        
+        #payBtn:disabled:hover {
+            background-color: #9CA3AF !important; /* 禁用悬停时保持灰色 */
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 导航栏 -->
+    <nav class="bg-white shadow-lg fixed top-0 left-0 right-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <a href="/" class="flex items-center">
+                        <i class="fas fa-robot text-2xl text-blue-600"></i>
+                        <span class="ml-2 text-xl font-bold text-gray-800">{{.AppName}}</span>
+                    </a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="relative">
+                        <button id="userMenuBtn" class="flex items-center text-gray-700 hover:text-blue-600">
+                            <i class="fas fa-user-circle text-xl mr-2"></i>
+                            <span id="userName">用户名</span>
+                            <i class="fas fa-chevron-down ml-1"></i>
+                        </button>
+                        <div id="userDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                            <a href="/" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-home mr-2"></i>返回首页
+                            </a>
+                            <a href="/profile" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-user mr-2"></i>个人中心
+                            </a>
+                            <div class="border-t border-gray-100"></div>
+                            <button id="signOutBtn" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-sign-out-alt mr-2"></i>{{.T.SignOut}}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容 -->
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- 左侧：套餐选择 -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-xl font-semibold mb-6">选择套餐</h2>
+                    <!-- 套餐列表 -->
+                    <div id="plansList" class="space-y-4">
+                        <!-- 套餐卡片将通过JavaScript动态加载 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：支付信息 -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-lg shadow-lg p-6 sticky top-8">
+                    <h2 class="text-xl font-semibold mb-6">支付信息</h2>
+                    
+                    <!-- 订单摘要 -->
+                    <div class="mb-6">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-gray-600">套餐</span>
+                            <span id="selectedPlanName" class="font-medium">请选择套餐</span>
+                        </div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-gray-600">金额</span>
+                            <span id="selectedAmount" class="font-medium text-lg">¥0</span>
+                            <div id="basicAmountContainer" class="hidden relative">
+                                <span class="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500">¥</span>
+                                <input type="number" id="basicAmount" 
+                                    class="amount-input w-24 pl-6 pr-2 py-1 border border-gray-300 rounded-lg focus:outline-none text-right"
+                                    placeholder="金额" min="10" max="10000" step="1" value="0"
+                                />
+                            </div>
+                        </div>
+                        <hr class="my-3">
+                        <div class="flex justify-between items-center">
+                            <span class="font-semibold">总计</span>
+                            <span id="totalAmount" class="font-bold text-xl text-blue-600">¥0</span>
+                        </div>
+                    </div>
+
+                    <!-- 支付方式选择 -->
+                    <div class="mb-6">
+                        <h3 class="text-lg font-medium mb-4">选择支付方式</h3>
+                        <div id="paymentMethods" class="space-y-3">
+                            <!-- 支付方式将通过JavaScript动态加载 -->
+                        </div>
+                    </div>
+
+                    <!-- 支付按钮 -->
+                    <button id="payBtn" 
+                            class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                            disabled>
+                        <i class="fas fa-credit-card mr-2"></i>立即支付
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 支付弹窗 -->
+    <div id="paymentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg max-w-md w-full p-6">
+                <div class="text-center">
+                    <div id="paymentLoading" class="mb-4">
+                        <i class="fas fa-spinner loading-spinner text-3xl text-blue-600 mb-2"></i>
+                        <p class="text-gray-600">正在创建支付订单...</p>
+                    </div>
+                    
+                    <div id="paymentQR" class="hidden">
+                        <h3 class="text-lg font-semibold mb-4">扫码支付</h3>
+                        <div class="qr-code-container p-4 rounded-lg mb-4">
+                            <img id="qrCodeImage" src="" alt="支付二维码" class="mx-auto w-48 h-48">
+                        </div>
+                        <p class="text-sm text-gray-600 mb-4">请使用<span id="paymentMethodName"></span>扫描二维码完成支付</p>
+                        <div class="flex space-x-3">
+                            <button id="checkPaymentBtn" class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">
+                                <i class="fas fa-sync mr-1"></i>检查支付状态
+                            </button>
+                            <button id="cancelPaymentBtn" class="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600">
+                                取消支付
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="paymentSuccess" class="hidden">
+                        <i class="fas fa-check-circle text-5xl text-green-500 mb-4"></i>
+                        <h3 class="text-lg font-semibold mb-2">支付成功</h3>
+                        <p class="text-gray-600 mb-4">您的套餐已激活，感谢您的支持！</p>
+                        <button id="goToProfileBtn1" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">
+                            前往个人中心
+                        </button>
+                    </div>
+
+                    <div id="hasActivePlan" class="hidden">
+                        <i class="fas fa-info-circle text-5xl text-blue-500 mb-4"></i>
+                        <h3 class="text-lg font-semibold mb-2">您已有生效中的订单</h3>
+                        <div class="text-gray-600 mb-4">
+                            <p>套餐名称：<span id="planName" class="font-medium"></span></p>
+                            <p>到期时间：<span id="expireTime" class="font-medium text-orange-600"></span></p>
+                        </div>
+                        <div class="flex gap-3">
+                            <button id="upgradeBtn" class="flex-1 bg-gray-300 text-gray-500 py-2 rounded-lg cursor-not-allowed" disabled title="升级功能暂未开放">
+                                升级套餐
+                            </button>
+                            <button id="goToProfileBtn2" class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">
+                                跳转到用户中心
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="paymentError" class="hidden">
+                        <i class="fas fa-times-circle text-5xl text-red-500 mb-4"></i>
+                        <h3 class="text-lg font-semibold mb-2">支付失败</h3>
+                        <p id="errorMessage" class="text-gray-600 mb-4">支付过程中出现错误，请重试</p>
+                        <button id="retryPaymentBtn" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">
+                            重新支付
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="utils.js"></script>
+    <script src="payment.js"></script>
+</body>
+</html>

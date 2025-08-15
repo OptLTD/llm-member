@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.T.SigninPage}} - {{.AppName}}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .input-focus:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+        .floating-animation {
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        .password-strength {
+            height: 4px;
+            border-radius: 2px;
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen flex items-center justify-center p-4">
+    <!-- 背景装饰 -->
+    <div class="absolute inset-0 overflow-hidden">
+        <div class="absolute -top-40 -right-40 w-80 h-80 bg-white opacity-10 rounded-full floating-animation"></div>
+        <div class="absolute -bottom-40 -left-40 w-96 h-96 bg-white opacity-5 rounded-full floating-animation" style="animation-delay: -3s;"></div>
+        <div class="absolute top-1/2 left-1/4 w-32 h-32 bg-white opacity-10 rounded-full floating-animation" style="animation-delay: -1s;"></div>
+    </div>
+
+    <!-- 注册容器 -->
+    <div class="relative z-10 w-full max-w-md">
+        <!-- 标题 -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-white">{{.T.RegisterTitle}}</h1>
+        </div>
+
+        <!-- 注册表单 -->
+        <div class="glass-effect rounded-2xl shadow-2xl p-8">
+            <form id="signinForm" class="space-y-6">
+                <!-- 用户名输入 -->
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-user mr-2 text-indigo-600"></i>{{.T.Username}}
+                    </label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        required
+                        minlength="3"
+                        maxlength="50"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none input-focus transition-all duration-300"
+                        placeholder="{{.T.UsernamePlaceholder}}"
+                    >
+                    <p class="text-xs text-gray-500 mt-1">{{.T.UsernameHint}}</p>
+                </div>
+
+                <!-- 邮箱输入 -->
+                <div>
+                    <label for="email" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-envelope mr-2 text-indigo-600"></i>{{.T.Email}}
+                    </label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        name="email" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none input-focus transition-all duration-300"
+                        placeholder="{{.T.EmailPlaceholder}}"
+                    >
+                </div>
+
+                <!-- 手机号输入 -->
+                <div>
+                    <label for="phone" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-phone mr-2 text-indigo-600"></i>{{.T.Phone}}
+                    </label>
+                    <input 
+                        type="tel" 
+                        id="phone" 
+                        name="phone" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none input-focus transition-all duration-300"
+                        placeholder="{{.T.PhonePlaceholder}}"
+                    >
+                    <p class="text-xs text-gray-500 mt-1">{{.T.ContactHint}}</p>
+                </div>
+
+                <!-- 密码输入 -->
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-lock mr-2 text-indigo-600"></i>{{.T.Password}}
+                    </label>
+                    <div class="relative">
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required
+                            minlength="6"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none input-focus transition-all duration-300 pr-12"
+                            placeholder="{{.T.PasswordPlaceholder}}"
+                        >
+                        <button 
+                            type="button" 
+                            id="togglePassword" 
+                            class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                        >
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <!-- 密码强度指示器 -->
+                    <div class="mt-2">
+                        <div class="password-strength bg-gray-200" id="passwordStrength"></div>
+                        <p class="text-xs text-gray-500 mt-1" id="passwordStrengthText">{{.T.PasswordStrength}}</p>
+                    </div>
+                </div>
+
+                <!-- 确认密码输入 -->
+                <div>
+                    <label for="confirmPassword" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-lock mr-2 text-indigo-600"></i>{{.T.ConfirmPassword}}
+                    </label>
+                    <div class="relative">
+                        <input 
+                            type="password" 
+                            id="confirmPassword" 
+                            name="confirmPassword" 
+                            required
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none input-focus transition-all duration-300 pr-12"
+                            placeholder="{{.T.ConfirmPasswordPlaceholder}}"
+                        >
+                        <button 
+                            type="button" 
+                            id="toggleConfirmPassword" 
+                            class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                        >
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <p class="text-xs text-red-500 mt-1 hidden" id="passwordMismatch">{{.T.PasswordMismatch}}</p>
+                </div>
+
+                <!-- 服务条款 -->
+                <div class="flex items-start">
+                    <input type="checkbox" id="agreeTerms" required class="mt-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <label for="agreeTerms" class="ml-2 text-sm text-gray-600">
+                        {{.T.AgreeTerms}}
+                        <a href="#" class="text-indigo-600 hover:text-indigo-500">{{.T.TermsOfService}}</a>
+                        {{.T.And}}
+                        <a href="#" class="text-indigo-600 hover:text-indigo-500">{{.T.PrivacyPolicy}}</a>
+                    </label>
+                </div>
+
+                <!-- 注册按钮 -->
+                <button 
+                    type="submit" 
+                    class="w-full btn-primary text-white py-3 px-4 rounded-lg font-medium focus:outline-none focus:ring-4 focus:ring-indigo-300"
+                >
+                    <i class="fas fa-user-plus mr-2"></i>{{.T.CreateAccount}}
+                </button>
+            </form>
+
+            <!-- 分割线 -->
+            <div class="my-6 flex items-center">
+                <div class="flex-1 border-t border-gray-300"></div>
+                <span class="px-4 text-sm text-gray-500">{{.T.Or}}</span>
+                <div class="flex-1 border-t border-gray-300"></div>
+            </div>
+
+            <!-- 第三方注册 -->
+            <div class="space-y-3">
+                <button class="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                    <i class="fab fa-google text-red-500 mr-3"></i>
+                    <span class="text-gray-700">{{.T.RegisterWithGoogle}}</span>
+                </button>
+                <button class="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                    <i class="fab fa-github text-gray-800 mr-3"></i>
+                    <span class="text-gray-700">{{.T.RegisterWithGitHub}}</span>
+                </button>
+            </div>
+
+            <!-- 登录链接 -->
+            <div class="mt-6 text-center">
+                <p class="text-gray-600">
+                    {{.T.HaveAccount}}
+                    <a href="/signin" class="text-indigo-600 hover:text-indigo-500 font-medium transition-colors">{{.T.SignInNow}}</a>
+                </p>
+            </div>
+        </div>
+
+        <!-- 返回首页 -->
+        <div class="text-center mt-6">
+            <a href="/" class="text-white hover:text-indigo-200 transition-colors">
+                <i class="fas fa-arrow-left mr-2"></i>{{.T.BackToHome}}
+            </a>
+        </div>
+    </div>
+
+    <!-- 通知容器 -->
+    <div id="notification-container" class="fixed top-4 right-4 z-50"></div>
+    <script src="/utils.js"></script>
+    <script>
+        // 全局状态
+        const RegisterApp = {
+            isLoading: false,
+            passwordStrength: 0
+        };
+
+        // 注册处理
+        async function handleRegister(formData) {
+            try {
+                RegisterApp.isLoading = true;
+                updateRegisterButton(true);
+
+                const data = await Utils.apiRequest('/api/signup', {
+                    body: JSON.stringify(formData)
+                });
+                
+                Utils.showNotification('注册成功！正在跳转到登录页面...', 'success');
+                setTimeout(() => {
+                    window.location.href = '/signin';
+                }, 1200);
+                
+            } catch (error) {
+                Utils.showNotification(error.message, 'error');
+            } finally {
+                RegisterApp.isLoading = false;
+                updateRegisterButton(false);
+            }
+        }
+
+        // 更新注册按钮状态
+        function updateRegisterButton(loading) {
+            const button = document.querySelector('#signinForm button[type="submit"]');
+            if (loading) {
+                button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>创建中...';
+                button.disabled = true;
+            } else {
+                button.innerHTML = '<i class="fas fa-user-plus mr-2"></i>创建账户';
+                button.disabled = false;
+            }
+        }
+
+        // 更新密码强度显示
+        function updatePasswordStrength(password) {
+            const { strength, feedback } = Utils.checkPasswordStrength(password);
+            const strengthBar = document.getElementById('passwordStrength');
+            const strengthText = document.getElementById('passwordStrengthText');
+
+            RegisterApp.passwordStrength = strength;
+
+            // 更新强度条
+            const colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-blue-500', 'bg-green-500'];
+            const labels = ['很弱', '弱', '一般', '强', '很强'];
+            
+            strengthBar.className = `password-strength ${colors[strength - 1] || 'bg-gray-200'}`;
+            strengthBar.style.width = `${(strength / 5) * 100}%`;
+            
+            if (password.length === 0) {
+                strengthText.textContent = '密码强度：请输入密码';
+                strengthText.className = 'text-xs text-gray-500 mt-1';
+            } else {
+                strengthText.textContent = `密码强度：${labels[strength - 1] || '很弱'}`;
+                strengthText.className = `text-xs mt-1 ${
+                    strength <= 2 ? 'text-red-500' :
+                    strength <= 3 ? 'text-yellow-500' :
+                    'text-green-500'
+                }`;
+            }
+        }
+
+        // 验证密码匹配
+        function validatePasswordMatch() {
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const mismatchMsg = document.getElementById('passwordMismatch');
+
+            if (confirmPassword && password !== confirmPassword) {
+                mismatchMsg.classList.remove('hidden');
+                return false;
+            } else {
+                mismatchMsg.classList.add('hidden');
+                return true;
+            }
+        }
+
+        // 事件监听器
+        function setupEventListeners() {
+            // 注册表单提交
+            document.getElementById('registerForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const username = document.getElementById('username').value.trim();
+                const email = document.getElementById('email').value.trim();
+                const phone = document.getElementById('phone').value.trim();
+                const password = document.getElementById('password').value;
+                const confirmPassword = document.getElementById('confirmPassword').value;
+                
+                // 验证必填字段
+                if (!username || !password) {
+                    Utils.showNotification('请填写用户名和密码', 'warning');
+                    return;
+                }
+                
+                // 验证邮箱或手机号
+                if (!email && !phone) {
+                    Utils.showNotification('请至少填写邮箱或手机号', 'warning');
+                    return;
+                }
+                
+                // 验证密码匹配
+                if (password !== confirmPassword) {
+                    Utils.showNotification('两次输入的密码不一致', 'warning');
+                    return;
+                }
+                
+                // 验证密码强度
+                if (RegisterApp.passwordStrength < 2) {
+                    Utils.showNotification('密码强度太弱，请设置更复杂的密码', 'warning');
+                    return;
+                }
+                
+                const formData = { username, password };
+                if (email) formData.email = email;
+                if (phone) formData.phone = phone;
+                
+                await handleRegister(formData);
+            });
+
+            // 密码显示/隐藏切换
+            document.getElementById('togglePassword').addEventListener('click', () => {
+                const passwordInput = document.getElementById('password');
+                const toggleIcon = document.querySelector('#togglePassword i');
+                
+                if (passwordInput.type === 'password') {
+                    passwordInput.type = 'text';
+                    toggleIcon.className = 'fas fa-eye-slash';
+                } else {
+                    passwordInput.type = 'password';
+                    toggleIcon.className = 'fas fa-eye';
+                }
+            });
+
+            document.getElementById('toggleConfirmPassword').addEventListener('click', () => {
+                const passwordInput = document.getElementById('confirmPassword');
+                const toggleIcon = document.querySelector('#toggleConfirmPassword i');
+                
+                if (passwordInput.type === 'password') {
+                    passwordInput.type = 'text';
+                    toggleIcon.className = 'fas fa-eye-slash';
+                } else {
+                    passwordInput.type = 'password';
+                    toggleIcon.className = 'fas fa-eye';
+                }
+            });
+
+            // 密码强度检测
+            document.getElementById('password').addEventListener('input', (e) => {
+                updatePasswordStrength(e.target.value);
+                validatePasswordMatch();
+            });
+
+            // 确认密码验证
+            document.getElementById('confirmPassword').addEventListener('input', validatePasswordMatch);
+
+            // 输入框焦点效果
+            document.querySelectorAll('input').forEach(input => {
+                input.addEventListener('focus', () => {
+                    input.parentElement.classList.add('ring-2', 'ring-indigo-500', 'ring-opacity-50');
+                });
+                
+                input.addEventListener('blur', () => {
+                    input.parentElement.classList.remove('ring-2', 'ring-indigo-500', 'ring-opacity-50');
+                });
+            });
+        }
+
+        // 检查是否已登录
+        function checkExistingSignup() {
+            const token = localStorage.getItem('userToken');
+            if (token) {
+                Utils.showNotification('您已登录，正在跳转...', 'info');
+                setTimeout(() => {
+                    window.location.href = '/profile';
+                }, 1000);
+            }
+        }
+
+        // 页面初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            checkExistingSignup();
+            setupEventListeners();
+            
+            // 聚焦到用户名输入框
+            document.getElementById('username').focus();
+        });
+    </script>
+</body>
+</html>

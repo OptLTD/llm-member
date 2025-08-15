@@ -2,104 +2,135 @@ package main
 
 import (
 	"log"
-	"os"
 
 	"github.com/gin-contrib/cors"
-	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 
-	"swiflow-auth/internal/config"
-	"swiflow-auth/internal/database"
-	"swiflow-auth/internal/handlers"
-	"swiflow-auth/internal/middleware"
-	"swiflow-auth/internal/services"
+	"llm-member/internal/auth"
+	"llm-member/internal/config"
+	"llm-member/internal/handle"
+	"llm-member/internal/service"
 )
 
 func main() {
 	// 加载环境变量
 	if err := godotenv.Load(); err != nil {
-		log.Println("Warning: .env file not found")
+		panic("Warning: .env file not found")
 	}
 
-	// 初始化配置
+	// 初始化配置（包含日志配置）
 	cfg := config.Load()
-
 	// 初始化数据库
-	db, err := database.Initialize(cfg.DBPath)
-	if err != nil {
+	if err := config.InitDB(cfg.DBPath); err != nil {
 		log.Fatal("Failed to initialize database:", err)
 	}
 
 	// 初始化服务
-	userService := services.NewUserService(db)
-	authService := services.NewAuthService(userService)
-	llmService := services.NewLLMService(cfg)
-	logService := services.NewLogService(db)
-
-	// 初始化处理器
-	h := handlers.New(llmService, logService, authService, userService, cfg)
+	authService := service.NewAuthService()
 
 	// 设置 Gin 模式
 	gin.SetMode(cfg.GinMode)
+	// 为 Gin 设置日志输出
+	gin.DefaultWriter = cfg.MultiWriter
+	gin.DefaultErrorWriter = cfg.MultiWriter
+
 	r := gin.Default()
 
 	// 配置 CORS
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"*"},
-		ExposeHeaders:    []string{"Content-Length"},
+		AllowHeaders: []string{"*"},
+		AllowOrigins: []string{"*"},
+		ExposeHeaders: []string{
+			"Content-Length",
+		},
+		AllowMethods: []string{
+			"GET", "POST", "PUT",
+			"DELETE", "OPTIONS",
+		},
 		AllowCredentials: true,
 	}))
 
-	// 静态文件服务
-	r.Use(static.Serve("/", static.LocalFile("./web", true)))
+	// 使用统一的路由和静态文件处理中间件
+	r.Use(handle.StaticRouteHandle(cfg))
 
-	// API 路由
+	// 管理功能路由（需要管理员权限）
+	compatibleV1 := r.Group("/compatible-v1", auth.APIKeyMiddleware(authService))
+	{
+		r := handle.NewRelayHandle()
+		compatibleV1.POST("/chat/completions", r.ChatCompletions)
+	}
+
 	api := r.Group("/api")
 	{
-		// 认证路由
-		api.POST("/login", h.Login)
-		api.POST("/logout", middleware.AuthMiddleware(authService), h.Logout)
-		api.GET("/user", middleware.AuthMiddleware(authService), h.GetCurrentUser)
-
-		// 大模型代理路由（使用 API Key 认证）
-		api.POST("/chat/completions", middleware.APIKeyMiddleware(authService), h.ChatCompletions)
-
-		// Web管理界面路由（使用Token认证）
-		webAuth := api.Group("/", middleware.AuthMiddleware(authService))
+		rootApi := api.Group("/", auth.NoneMiddleware())
 		{
-			webAuth.GET("/models", h.GetModels)
-			webAuth.GET("/logs", h.GetLogs)
-			webAuth.DELETE("/logs/:id", h.DeleteLog)
-			webAuth.GET("/stats", h.GetStats)
-			webAuth.GET("/config", h.GetConfig)
-			webAuth.PUT("/config", h.UpdateConfig)
-			webAuth.POST("/test/chat", h.TestChat) // 测试用聊天接口
+			a := handle.NewAuthHandle(authService)
+			rootApi.POST("/verify", a.VerifyEmail)
+			rootApi.POST("/signin", a.UserSignIn)
+			rootApi.POST("/signup", a.UserSignUp)
+			rootApi.POST("/signout", a.UserSignOut)
+			rootApi.POST("/admin/signin", a.AdminSignIn)
+			rootApi.POST("/admin/signout", a.AdminSignOut)
+			rootApi.POST("/third/:provider", a.ThirdPartySignin) // 第三方登录
+
+			s := handle.NewPublicHandler()
+			rootApi.POST("/pricing-plans", s.GetPricingPlans)
 		}
 
-		// 管理功能路由（需要管理员权限）
-		admin := api.Group("/admin", middleware.AuthMiddleware(authService), middleware.AdminMiddleware())
+		// 需要认证的路由
+		basicApi := api.Group("/", auth.AuthMiddleware(authService))
 		{
-			admin.POST("/register", h.Register)
-			admin.GET("/users", h.GetUsers)
-			admin.PUT("/users/:id", h.UpdateUser)
-			admin.POST("/users/:id/regenerate-key", h.RegenerateAPIKey)
-			admin.POST("/users/:id/toggle", h.ToggleUserStatus)
-			admin.DELETE("/users/:id", h.DeleteUser)
+			b := handle.NewBasicHandle()
+			basicApi.PUT("/profile", b.SetUserProfile)
+			basicApi.POST("/profile", b.GetUserProfile)
+			basicApi.POST("/usage", b.GetUserUsage)
+			basicApi.POST("/orders", b.GetUserOrders)
+			basicApi.POST("/api-keys", b.GetUserAPIKeys)
+			basicApi.POST("/regenerate", b.RegenerateKey)
+		}
+
+		// 订单路由
+		orderApi := api.Group("/order", auth.AuthMiddleware(authService))
+		{
+			o := handle.NewOrderHandler()
+			orderApi.POST("/create", o.CreatePaymentOrder)
+			orderApi.POST("/methods", o.GetPaymentMethods)
+			orderApi.POST("/callback", o.DoPaymentCallback)
+			orderApi.POST("/query/:id", o.QueryPaymentOrder)
+			orderApi.POST("/qrcode/:id", o.ShowPaymentQrcode)
+		}
+
+		// 管理员路由
+		adminApi := api.Group("/admin", auth.AdminMiddleware(authService))
+		{
+			h := handle.NewAdminHandle()
+			adminApi.GET("/current", h.Current)
+			adminApi.PUT("/users/:id", h.UpdateUser)
+			adminApi.POST("/users/create", h.CreateUser)
+			adminApi.POST("/users/:id/toggle", h.ToggleUserStatus)
+			adminApi.POST("/users/:id/generate", h.GenerateAPIKey)
+
+			adminApi.POST("/logs", h.GetLogs)
+			adminApi.GET("/stats", h.GetStats)
+			adminApi.GET("/models", h.GetModels)
+			adminApi.POST("/users", h.GetUsers)
+			adminApi.POST("/orders", h.GetOrders)
+		}
+
+		// 设置路由
+		setupApi := api.Group("/setup", auth.AdminMiddleware(authService))
+		{
+			s := handle.NewSetupHandler()
+			setupApi.GET("/pricing", s.GetPricingPlans)
+			setupApi.PUT("/pricing/:plan", s.SetPricingPlan)
 		}
 	}
 
 	// 启动服务器
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	log.Printf("Server starting on port %s", port)
-	log.Printf("Admin panel: http://localhost:%s", port)
-	if err := r.Run(":" + port); err != nil {
+	log.Printf("Server starting on port %s", cfg.AppPort)
+	log.Printf("Admin panel: http://localhost:%s", cfg.AppPort)
+	if err := r.Run(":" + cfg.AppPort); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
 }

@@ -1,4 +1,4 @@
-# 大模型代理管理系统
+# LLM Member(大模型会员系统)
 
 一个用 Golang 实现的大模型代理服务，支持多个大模型提供商，包含完整的管理界面。
 
@@ -16,7 +16,7 @@
 
 ### 1. 环境要求
 
-- Go 1.21+
+- Go 1.24+
 - 现代浏览器
 
 ### 2. 安装依赖
@@ -81,7 +81,7 @@ Authorization: Bearer <your_token>
 ### 聊天完成 API
 
 ```bash
-curl -X POST http://localhost:8080/api/chat/completions \
+curl -X POST http://localhost:8080/compatible-v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <your_token>" \
   -d '{
@@ -118,7 +118,7 @@ curl -X GET "http://localhost:8080/api/logs?page=1&page_size=20" \
 ## 项目结构
 
 ```
-swiflow-auth/
+llm-member/
 ├── main.go                 # 主程序入口
 ├── go.mod                  # Go 模块文件
 ├── .env                    # 环境变量配置

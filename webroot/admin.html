@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.AppName}} Admin</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css" rel="stylesheet">
+  <style>
+    .sidebar-transition {
+      transition: transform 0.3s ease-in-out;
+    }
+
+    .fade-in {
+      animation: fadeIn 0.5s ease-in;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .card-hover {
+      transition: all 0.3s ease;
+    }
+
+    .card-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+
+<body class="bg-gray-50">
+  <!-- 登录页面 -->
+  <div id="signInPage"
+    class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
+    <div class="bg-white p-8 rounded-lg shadow-2xl w-96 fade-in">
+      <div class="text-center mb-8">
+        <i class="fas fa-robot text-4xl text-blue-500 mb-4"></i>
+        <h1 class="text-2xl font-bold text-gray-800">{{.AppName}} LLM Member</h1>
+        <!-- <p class="text-gray-600 mt-2">请登录以继续</p> -->
+      </div>
+      <form id="signInForm">
+        <div class="mb-4">
+          <label class="block text-gray-700 text-sm font-bold mb-2">用户名</label>
+          <input type="text" id="username"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+            required>
+        </div>
+        <div class="mb-6">
+          <label class="block text-gray-700 text-sm font-bold mb-2">密码</label>
+          <input type="password" id="password"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+            required>
+        </div>
+        <button type="submit"
+          class="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition duration-200">
+          <i class="fas fa-sign-in-alt mr-2"></i>登录
+        </button>
+      </form>
+      <div id="signInError" class="mt-4 text-red-500 text-sm hidden"></div>
+    </div>
+  </div>
+
+  <!-- 主应用界面 -->
+  <div id="mainApp" class="hidden h-screen bg-gray-100 flex flex-col">
+    <!-- 顶部导航栏 - 移动端显示菜单按钮和系统名称 -->
+    <nav class="fixed top-0 left-0 right-0 z-50 bg-white shadow-lg border-b h-16 lg:hidden">
+      <div class="mx-auto px-4 h-full">
+        <div class="flex justify-between h-full">
+          <div class="flex items-center">
+            <button id="sidebarToggle" class="text-gray-500 hover:text-gray-700 mr-4">
+              <i class="fas fa-bars text-xl"></i>
+            </button>
+            <div class="flex items-center">
+              <i class="fas fa-robot text-xl text-blue-500 mr-2"></i>
+              <h1 class="text-lg font-semibold text-gray-800">大模型代理管理系统</h1>
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <div class="flex flex-1 lg:pt-0 pt-16 overflow-hidden">
+      <!-- 侧边栏 -->
+      <div id="sidebar"
+        class="bg-gray-800 text-white w-64 h-full sidebar-transition lg:translate-x-0 -translate-x-full fixed lg:relative z-30 flex flex-col hidden lg:flex">
+        <!-- 标题区域 -->
+        <div class="p-4 border-b border-gray-700">
+          <div class="flex items-center">
+            <i class="fas fa-robot text-2xl text-blue-400 mr-3"></i>
+            <h1 class="text-lg font-semibold text-white">{{.AppName}} LLM Member</h1>
+          </div>
+        </div>
+
+        <!-- 导航菜单 -->
+        <div class="flex-1 p-4">
+          <nav class="space-y-2">
+            <a href="#"
+              class="nav-item flex items-center px-4 py-2 text-gray-300 hover:bg-gray-700 rounded-lg transition duration-200"
+              data-page="dashboard">
+              <i class="fas fa-tachometer-alt mr-3"></i>
+              仪表板
+            </a>
+            <a href="#"
+              class="nav-item flex items-center px-4 py-2 text-gray-300 hover:bg-gray-700 rounded-lg transition duration-200"
+              data-page="chat">
+              <i class="fas fa-comments mr-3"></i>
+              聊天测试
+            </a>
+            <a href="#"
+              class="nav-item flex items-center px-4 py-2 text-gray-300 hover:bg-gray-700 rounded-lg transition duration-200"
+              data-page="logs">
+              <i class="fas fa-list mr-3"></i>
+              请求日志
+            </a>
+            <a href="#"
+              class="nav-item flex items-center px-4 py-2 text-gray-300 hover:bg-gray-700 rounded-lg transition duration-200"
+              data-page="users">
+              <i class="fas fa-users mr-3"></i>
+              会员管理
+            </a>
+            <a href="#"
+              class="nav-item flex items-center px-4 py-2 text-gray-300 hover:bg-gray-700 rounded-lg transition duration-200"
+              data-page="orders">
+              <i class="fas fa-shopping-cart mr-3"></i>
+              订单管理
+            </a>
+            <a href="#"
+              class="nav-item flex items-center px-4 py-2 text-gray-300 hover:bg-gray-700 rounded-lg transition duration-200"
+              data-page="models">
+              <i class="fas fa-cogs mr-3"></i>
+              模型管理
+            </a>
+
+            <a href="#"
+              class="nav-item flex items-center px-4 py-2 text-gray-300 hover:bg-gray-700 rounded-lg transition duration-200"
+              data-page="pricing-plans">
+              <i class="fas fa-tags mr-3"></i>
+              付费方案
+            </a>
+            <a href="#"
+              class="nav-item flex items-center px-4 py-2 text-gray-300 hover:bg-gray-700 rounded-lg transition duration-200"
+              data-page="settings">
+              <i class="fas fa-sliders-h mr-3"></i>
+              系统设置
+            </a>
+          </nav>
+        </div>
+
+        <!-- 底部用户信息和退出登录 -->
+        <div class="px-4 py-3 border-t border-gray-700">
+          <div class="flex items-center justify-between">
+            <div class="text-sm text-gray-400">
+              <i class="fas fa-user mr-1"></i>
+              <span id="currentUser">管理员</span>
+            </div>
+            <a href="#" id="signOutBtn"
+              class="flex items-center text-sm text-gray-400 hover:text-red-400 transition duration-200">
+              <i class="fas fa-sign-out-alt mr-1"></i>
+              退出登录
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 主内容区域 -->
+      <div class="flex-1 p-6 overflow-y-auto">
+        <!-- 仪表板页面 -->
+        <div id="dashboardPage" class="page-content">
+          <div class="mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">仪表板 <span class="text-lg font-normal text-gray-600">-
+                系统运行状态概览</span></h2>
+          </div>
+
+          <!-- 统计卡片 -->
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-lg shadow card-hover">
+              <div class="flex items-center">
+                <div class="p-3 text-blue-500">
+                  <i class="fas fa-chart-line text-xl"></i>
+                </div>
+                <div class="ml-4">
+                  <div class="flex items-baseline gap-2">
+                    <p class="text-sm font-medium text-gray-600">总请求数</p>
+                    <p id="totalRequests" class="text-xl font-semibold text-gray-900">0</p>
+                  </div>
+                  <p class="text-sm text-gray-500">成功率: <span id="successRate">0%</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow card-hover">
+              <div class="flex items-center">
+                <div class="p-3 text-green-500">
+                  <i class="fas fa-coins text-xl"></i>
+                </div>
+                <div class="ml-4">
+                  <div class="flex items-baseline gap-2">
+                    <p class="text-sm font-medium text-gray-600">总 Token 数</p>
+                    <p id="totalTokens" class="text-xl font-semibold text-gray-900">0</p>
+                  </div>
+                  <p class="text-sm text-gray-500">输入: <span id="inputTokens">0</span> / 输出: <span id="outputTokens">0</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow card-hover">
+              <div class="flex items-center">
+                <div class="p-3 text-purple-500">
+                  <i class="fas fa-users text-xl"></i>
+                </div>
+                <div class="ml-4">
+                  <div class="flex items-baseline gap-2">
+                    <p class="text-sm font-medium text-gray-600">总会员数</p>
+                    <p id="totalMembers" class="text-xl font-semibold text-gray-900">0</p>
+                  </div>
+                  <p class="text-sm text-gray-500">付费: <span id="paidMembers">0</span> / 总数: <span id="totalMembersCount">0</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow card-hover">
+              <div class="flex items-center">
+                <div class="p-3 text-indigo-500">
+                  <i class="fas fa-user-plus text-xl"></i>
+                </div>
+                <div class="ml-4">
+                  <div class="flex items-baseline gap-2">
+                    <p class="text-sm font-medium text-gray-600">本月新增</p>
+                    <p id="monthlyNewMembers" class="text-xl font-semibold text-gray-900">0</p>
+                  </div>
+                  <p class="text-sm text-gray-500">付费: <span id="monthlyNewPaidMembers">0</span> / 总数: <span id="monthlyNewMembersCount">0</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow card-hover">
+              <div class="flex items-center">
+                <div class="p-3 text-pink-500">
+                  <i class="fas fa-shopping-cart text-xl"></i>
+                </div>
+                <div class="ml-4">
+                  <div class="flex items-baseline gap-2">
+                    <p class="text-sm font-medium text-gray-600">订单总数</p>
+                    <p id="totalOrders" class="text-xl font-semibold text-gray-900">0</p>
+                  </div>
+                  <p class="text-sm text-gray-500">成功: <span id="successfulOrders">0</span> / 总数: <span id="totalOrdersCount">0</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow card-hover">
+              <div class="flex items-center">
+                <div class="p-3 text-red-500">
+                  <i class="fas fa-dollar-sign text-xl"></i>
+                </div>
+                <div class="ml-4">
+                  <div class="flex items-baseline gap-2">
+                    <p class="text-sm font-medium text-gray-600">订单总额</p>
+                    <p id="totalRevenue" class="text-xl font-semibold text-gray-900">¥0</p>
+                  </div>
+                  <p class="text-sm text-gray-500">成功: <span id="successfulRevenue">¥0</span> / 总额: <span id="totalRevenueAmount">¥0</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow card-hover">
+              <div class="flex items-center">
+                <div class="p-3 text-yellow-500">
+                  <i class="fas fa-calendar-alt text-xl"></i>
+                </div>
+                <div class="ml-4">
+                  <div class="flex items-baseline gap-2">
+                    <p class="text-sm font-medium text-gray-600">本月新增</p>
+                    <p id="monthlyRevenue" class="text-xl font-semibold text-gray-900">¥0</p>
+                  </div>
+                  <p class="text-sm text-gray-500">成功: <span id="monthlySuccessfulRevenue">¥0</span> / 总额: <span id="monthlyTotalRevenue">¥0</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow card-hover">
+              <div class="flex items-center">
+                <div class="p-3 text-pink-500">
+                  <i class="fas fa-calendar-week text-xl"></i>
+                </div>
+                <div class="ml-4">
+                  <div class="flex items-baseline gap-2">
+                    <p class="text-sm font-medium text-gray-600">本周新增</p>
+                    <p id="weeklyRevenue" class="text-xl font-semibold text-gray-900">¥0</p>
+                  </div>
+                  <p class="text-sm text-gray-500">成功: <span id="weeklySuccessfulRevenue">¥0</span> / 总额: <span id="weeklyTotalRevenue">¥0</span></p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 图表区域 -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-white p-6 rounded-lg shadow">
+              <h3 class="text-lg font-semibold text-gray-800 mb-4">模型使用统计</h3>
+              <div id="modelUsageChart" class="h-64"></div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+              <h3 class="text-lg font-semibold text-gray-800 mb-4">提供商使用统计</h3>
+              <div id="providerUsageChart" class="h-64"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 聊天测试页面 -->
+        <div id="chatPage" class="page-content hidden">
+          <div class="mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">聊天测试 <span class="text-lg font-normal text-gray-600">- 测试大模型
+                API 功能</span></h2>
+          </div>
+
+          <div class="bg-white rounded-lg shadow">
+            <div class="p-6">
+              <!-- 左右布局：消息内容(2/3) + 模型选择(1/3) -->
+              <div class="flex gap-6">
+                <!-- 左侧：消息内容区域 (2/3 宽度) -->
+                <div class="flex-1" style="flex: 2;">
+                  <label class="block text-sm font-medium text-gray-700 mb-2">消息内容</label>
+                  <textarea id="messageInput" rows="12"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 resize-none"
+                    placeholder="请输入您的问题..."></textarea>
+                </div>
+
+                <!-- 右侧：模型选择区域 (1/3 宽度) -->
+                <div class="flex-1" style="flex: 1;">
+                  <div class="space-y-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">选择模型</label>
+                      <select id="modelSelect"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                        <option value="">请选择模型</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">Temperature</label>
+                      <input type="number" id="temperature" min="0" max="2" step="0.1" value="0.7"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">Max
+                        Tokens</label>
+                      <input type="number" id="maxTokens" min="1" max="4000" value="1000"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                      <label class="flex items-center">
+                        <input type="checkbox" id="streamMode" class="mr-2">
+                        <span class="text-sm text-gray-700">流式返回</span>
+                      </label>
+                    </div>
+                    <!-- 发送按钮放在表单最下方 -->
+                    <div class="pt-2">
+                      <button id="sendMessage"
+                        class="w-full bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition duration-200">
+                        <i class="fas fa-paper-plane mr-2"></i>发送
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="chatResponse" class="hidden p-6 border-t bg-gray-50">
+              <h4 class="font-medium text-gray-800 mb-2">响应结果：</h4>
+              <div id="responseContent" class="bg-white p-4 rounded border text-gray-700"></div>
+              <div id="responseStats" class="mt-4 text-sm text-gray-600"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 会员管理页面 -->
+        <div id="usersPage" class="page-content hidden">
+          <div class="mb-6 flex justify-between items-center">
+            <div>
+              <h2 class="text-2xl font-bold text-gray-800">会员管理 <span class="text-lg font-normal text-gray-600">-
+                  管理系统会员和 API Key</span></h2>
+            </div>
+            <button id="addUserBtn"
+              class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition duration-200">
+              <i class="fas fa-user-plus mr-2"></i>添加会员
+            </button>
+          </div>
+
+          <!-- 筛选和搜索区域 -->
+          <div class="bg-white rounded-lg shadow mb-6">
+            <div class="p-6">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">用户状态</label>
+                  <select id="userStatusFilter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                    <option value="">全部状态</option>
+                    <option value="active">活跃</option>
+                    <option value="inactive">禁用</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">用户权限</label>
+                  <select id="userRoleFilter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                    <option value="">全部权限</option>
+                    <option value="admin">管理员</option>
+                    <option value="user">普通用户</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">用户搜索</label>
+                  <input type="text" id="userNameSearchInput" placeholder="输入用户名或邮箱" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                </div>
+                <div class="flex items-end">
+                  <button id="searchUsersBtn" class="w-full bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition duration-200">
+                    <i class="fas fa-search mr-2"></i>搜索
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 会员列表 -->
+          <div class="bg-white rounded-lg shadow">
+            <div class="p-6 border-b">
+              <!-- 标题和分页控件在同一行 -->
+              <div id="usersPagination" class="flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-gray-800">会员列表</h3>
+                <div class="flex items-center space-x-4">
+                  <div class="text-sm text-gray-600">
+                    显示第 <span id="currentUserPageStart">0</span> - <span id="currentUserPageEnd">0</span> 条，共 <span id="totalUsersCount">0</span> 条会员
+                  </div>
+                  <div class="flex space-x-2">
+                    <button id="prevUserPageBtn" class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                      <i class="fas fa-chevron-left"></i> 上一页
+                    </button>
+                    <div id="userPageNumbers" class="flex space-x-1">
+                      <!-- 页码按钮将动态生成 -->
+                    </div>
+                    <button id="nextUserPageBtn" class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                      下一页 <i class="fas fa-chevron-right"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="p-6">
+              <div id="usersTable">
+                <p class="text-gray-500">加载中...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 其他页面内容将在这里添加 -->
+        <div id="logsPage" class="page-content hidden">
+          <div class="mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">请求日志 <span class="text-lg font-normal text-gray-600">- 查看和管理
+                API 请求历史</span></h2>
+          </div>
+
+          <!-- 筛选区域 -->
+          <div class="bg-white rounded-lg shadow mb-6">
+            <div class="p-6">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <!-- 日志状态筛选 -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">状态</label>
+                  <select id="logStatusFilter" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">全部状态</option>
+                    <option value="success">成功</option>
+                    <option value="error">失败</option>
+                  </select>
+                </div>
+
+                <!-- 模型筛选 -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">模型</label>
+                  <select id="logModelFilter" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">全部模型</option>
+                  </select>
+                </div>
+
+                <!-- 提供商筛选 -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">提供商</label>
+                  <select id="logProviderFilter" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">全部提供商</option>
+                  </select>
+                </div>
+
+                <!-- IP搜索 -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">IP地址</label>
+                  <div class="flex">
+                    <input type="text" id="logIpSearchInput" placeholder="搜索IP地址" 
+                      class="flex-1 border border-gray-300 rounded-l-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="searchLogsBtn" class="bg-blue-500 text-white px-4 py-2 rounded-r-md hover:bg-blue-600 transition duration-200">
+                      <i class="fas fa-search"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 日志列表 -->
+          <div class="bg-white rounded-lg shadow">
+            <div class="p-6">
+              <div id="logsTable">
+                <p class="text-gray-500">加载中...</p>
+              </div>
+            </div>
+
+            <!-- 分页控件 -->
+            <div class="px-6 py-4 border-t border-gray-200">
+              <div class="flex items-center justify-between">
+                <div class="text-sm text-gray-700">
+                  显示第 <span id="currentLogPageStart">0</span> 到 <span id="currentLogPageEnd">0</span> 条，
+                  共 <span id="totalLogsCount">0</span> 条记录
+                </div>
+                <div class="flex items-center space-x-2">
+                  <button id="prevLogPageBtn" class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fas fa-chevron-left"></i> 上一页
+                  </button>
+                  <div id="logPageNumbers" class="flex space-x-1">
+                    <!-- 页码按钮将在这里动态生成 -->
+                  </div>
+                  <button id="nextLogPageBtn" class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                    下一页 <i class="fas fa-chevron-right"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="modelsPage" class="page-content hidden">
+          <div class="mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">模型管理 <span class="text-lg font-normal text-gray-600">-
+                管理可用的大模型</span></h2>
+          </div>
+
+          <!-- 筛选标签 -->
+          <div class="mb-6">
+            <div class="flex flex-wrap gap-2">
+              <button
+                class="provider-filter-btn bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600 transition duration-200"
+                data-provider="all">
+                全部
+              </button>
+              <button
+                class="provider-filter-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300 transition duration-200"
+                data-provider="doubao">
+                豆包
+              </button>
+              <button
+                class="provider-filter-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300 transition duration-200"
+                data-provider="qwen">
+                通义千问
+              </button>
+              <button
+                class="provider-filter-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300 transition duration-200"
+                data-provider="bigmodel">
+                智谱AI
+              </button>
+              <button
+                class="provider-filter-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300 transition duration-200"
+                data-provider="openai">
+                OpenAI
+              </button>
+              <button
+                class="provider-filter-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300 transition duration-200"
+                data-provider="grok">
+                Grok
+              </button>
+              <button
+                class="provider-filter-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300 transition duration-200"
+                data-provider="claude">
+                Claude
+              </button>
+              <button
+                class="provider-filter-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300 transition duration-200"
+                data-provider="gemini">
+                Gemini
+              </button>
+              <button
+                class="provider-filter-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300 transition duration-200"
+                data-provider="openrouter">
+                OpenRouter
+              </button>
+              <button
+                class="provider-filter-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300 transition duration-200"
+                data-provider="siliconflow">
+                SiliconFlow
+              </button>
+              <button
+                class="provider-filter-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300 transition duration-200"
+                data-provider="openai-like">
+                OpenAI-Like
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-lg shadow">
+            <div class="p-6">
+              <div id="modelsTable">
+                <p class="text-gray-500">加载中...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="settingsPage" class="page-content hidden">
+          <div class="mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">系统设置 <span class="text-lg font-normal text-gray-600">-
+                配置系统参数</span></h2>
+          </div>
+          <div class="bg-white rounded-lg shadow">
+            <div class="p-6">
+              <p class="text-gray-500">设置功能开发中...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 订单管理页面 -->
+        <div id="ordersPage" class="page-content hidden">
+          <div class="mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">订单管理 <span class="text-lg font-normal text-gray-600">-
+                查看和管理用户订单</span></h2>
+          </div>
+
+          <!-- 筛选和搜索区域 -->
+          <div class="bg-white rounded-lg shadow mb-6">
+            <div class="p-6">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">订单状态</label>
+                  <select id="orderStatusFilter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                    <option value="">全部状态</option>
+                    <option value="pending">待支付</option>
+                    <option value="paid">已支付</option>
+                    <option value="cancelled">已取消</option>
+                    <option value="expired">已过期</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">支付方式</label>
+                  <select id="paymentMethodFilter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                    <option value="">全部方式</option>
+                    <option value="alipay">支付宝</option>
+                    <option value="wechat">微信支付</option>
+                    <option value="paypal">PayPal</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">用户搜索</label>
+                  <input type="text" id="userSearchInput" placeholder="输入用户名或邮箱" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                </div>
+                <div class="flex items-end">
+                  <button id="searchOrdersBtn" class="w-full bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition duration-200">
+                    <i class="fas fa-search mr-2"></i>搜索
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 订单列表 -->
+          <div class="bg-white rounded-lg shadow">
+            <div class="p-6 border-b">
+              <!-- 标题和分页控件在同一行 -->
+              <div id="ordersPagination" class="flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-gray-800">订单列表</h3>
+                <div class="flex items-center space-x-4">
+                  <div class="text-sm text-gray-600">
+                    显示第 <span id="currentPageStart">0</span> - <span id="currentPageEnd">0</span> 条，共 <span id="totalOrdersCount">0</span> 条订单
+                  </div>
+                  <div class="flex space-x-2">
+                    <button id="prevPageBtn" class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                      <i class="fas fa-chevron-left"></i> 上一页
+                    </button>
+                    <div id="pageNumbers" class="flex space-x-1">
+                      <!-- 页码按钮将动态生成 -->
+                    </div>
+                    <button id="nextPageBtn" class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                      下一页 <i class="fas fa-chevron-right"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="p-6">
+              <div id="ordersTable">
+                <p class="text-gray-500">加载中...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 付费方案页面 -->
+        <div id="pricing-plansPage" class="page-content hidden">
+          <div class="mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">付费方案 <span class="text-lg font-normal text-gray-600">-
+                管理订阅计划</span></h2>
+          </div>
+
+          <!-- 使用说明区域 -->
+          <div class="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <div class="flex items-start">
+              <div class="flex-shrink-0">
+                <i class="fas fa-info-circle text-blue-600 text-xl mt-1"></i>
+              </div>
+              <div class="ml-4">
+                <h3 class="text-lg font-semibold text-blue-900 mb-3">使用说明</h3>
+                <div class="text-blue-800 space-y-2">
+                  <div class="flex items-start">
+                    <i class="fas fa-check-circle text-blue-600 mt-1 mr-2 flex-shrink-0"></i>
+                    <span>点击方案卡片右上角的编辑按钮可以修改方案信息，包括名称、价格、描述和特性</span>
+                  </div>
+                  <div class="flex items-start">
+                    <i class="fas fa-check-circle text-blue-600 mt-1 mr-2 flex-shrink-0"></i>
+                    <span>可以通过启用/禁用开关来控制方案是否对用户可见</span>
+                  </div>
+                  <div class="flex items-start">
+                    <i class="fas fa-check-circle text-blue-600 mt-1 mr-2 flex-shrink-0"></i>
+                    <span>方案特性支持多行输入，每行一个特性，会自动显示为列表格式</span>
+                  </div>
+                  <div class="flex items-start">
+                    <i class="fas fa-check-circle text-blue-600 mt-1 mr-2 flex-shrink-0"></i>
+                    <span>价格修改后会立即生效，影响新的订阅用户</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="pricing-plans-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <!-- 方案列表将通过JavaScript动态加载 -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 遮罩层 -->
+  <div id="overlay" class="fixed inset-0 bg-black bg-opacity-50 z-20 hidden lg:hidden"></div>
+
+  <!-- 添加用户弹窗 -->
+  <div id="addUserModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div class="p-6 border-b">
+        <div class="flex justify-between items-center">
+          <h3 class="text-lg font-semibold text-gray-800">添加新用户</h3>
+          <button id="closeModalBtn" class="text-gray-400 hover:text-gray-600">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+      </div>
+      <div class="p-6">
+        <form id="createUserForm" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">用户名</label>
+            <input type="text" id="newUsername"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+              required>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">邮箱</label>
+            <input type="email" id="newEmail"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+              required>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">密码</label>
+            <input type="password" id="newPassword"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+              required>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">请求限制（每小时）</label>
+            <input type="number" id="newRequestLimit" min="1" value="100"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="flex items-center">
+              <input type="checkbox" id="newIsAdmin" class="mr-2">
+              <span class="text-sm text-gray-700">管理员权限</span>
+            </label>
+          </div>
+          <div id="createUserError" class="text-red-500 text-sm hidden"></div>
+          <div id="createUserSuccess" class="text-green-500 text-sm hidden"></div>
+          <div class="flex justify-end space-x-3 pt-4">
+            <button type="button" id="cancelBtn"
+              class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition duration-200">
+              取消
+            </button>
+            <button type="submit"
+              class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition duration-200">
+              <i class="fas fa-user-plus mr-2"></i>添加用户
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 编辑付费方案弹窗 -->
+  <div id="editPlanModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+      <div class="p-6 border-b">
+        <div class="flex justify-between items-center">
+          <h3 class="text-lg font-semibold text-gray-800">编辑付费方案</h3>
+          <button id="closePlanModalBtn" class="text-gray-400 hover:text-gray-600">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+      </div>
+      <div class="p-6">
+        <form id="editPlanForm" class="space-y-3">
+          <input type="hidden" id="editPlanType">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">方案名称</label>
+              <input type="text" id="editPlanName"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                required>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">价格 (¥)</label>
+              <input type="number" id="editPlanPrice" step="1"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                required>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">描述</label>
+            <input id="editPlanDesc"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+              required></input>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">特性 (每行一个)</label>
+            <textarea id="editPlanFeatures" rows="5"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+              placeholder="每月 10,000 次请求&#10;基础模型访问&#10;邮件支持" required></textarea>
+          </div>
+          <div>
+            <label class="flex items-center">
+              <input type="checkbox" id="editPlanEnabled" class="mr-2">
+              <span class="text-sm text-gray-700">启用此方案</span>
+            </label>
+          </div>
+          <div class="flex justify-end space-x-3 pt-4">
+            <button type="button" id="cancelEditPlan"
+              class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition duration-200">
+              取消
+            </button>
+            <button type="submit"
+              class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition duration-200">
+              <i class="fas fa-save mr-2"></i>保存
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <script src="admin-common.js"></script>
+  <script src="admin-dashboard.js"></script>
+  <script src="admin-llm-logs.js"></script>
+  <script src="admin-testchat.js"></script>
+  <script src="admin-pricing.js"></script>
+  <script src="admin-orders.js"></script>
+  <script src="admin-member.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.AppName}} - {{.AppDesc}}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        .fade-in {
+            animation: fadeIn 0.6s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .pricing-card {
+            transition: all 0.3s ease;
+        }
+        .pricing-card:hover {
+            transform: scale(1.05);
+        }
+        .nav-link {
+            transition: all 0.3s ease;
+        }
+        .nav-link:hover {
+            color: #667eea;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 导航栏 -->
+    <nav class="bg-white shadow-lg fixed w-full top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <a class="flex-shrink-0" href="/">
+                        <i class="fas fa-robot text-2xl text-blue-600"></i>
+                        <span class="ml-2 text-xl font-bold text-gray-800">{{.AppName}}</span>
+                    </a>
+                    <div class="hidden md:ml-10 md:flex md:space-x-8">
+                        <a href="/" class="nav-link text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium">首页</a>
+                        <a href="/pricing" class="nav-link text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium">定价</a>
+                        </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="signInBtn" class="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium">
+                        <i class="fas fa-sign-in-alt mr-1"></i>{{.T.SignInButton}}
+                    </button>
+                    <!-- 用户菜单（登录后显示） -->
+                    <div id="userMenu" class="hidden relative">
+                        <button id="userMenuBtn" class="flex items-center text-gray-700 hover:text-blue-600">
+                            <i class="fas fa-user-circle text-xl mr-2"></i>
+                            <span id="userName"></span>
+                            <i class="fas fa-chevron-down ml-1"></i>
+                        </button>
+                        <div id="userDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                            <a href="/profile" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-user mr-2"></i>{{.T.Profile}}
+                            </a>
+                            <a href="/profile#usage" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-chart-bar mr-2"></i>{{.T.UsageStats}}
+                            </a>
+                            <a href="/profile#api-keys" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-key mr-2"></i>{{.T.APIKeys}}
+                            </a>
+                            <div class="border-t border-gray-100"></div>
+                            <button id="signOutBtn" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-sign-out-alt mr-2"></i>{{.T.SignOut}}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容区域 -->
+    <main class="pt-16">
+        <!-- 英雄区域 -->
+        <section class="gradient-bg text-white py-20 lg:py-32">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center fade-in">
+                    <h1 class="text-4xl md:text-6xl font-bold mb-6 leading-tight">
+                        智能AI助手
+                        <span class="block text-blue-200">让工作更高效</span>
+                    </h1>
+                    <p class="text-xl md:text-2xl mb-8 max-w-4xl mx-auto text-blue-100">
+                        集成多种AI模型，提供强大的对话、写作、编程和分析能力，助您轻松应对各种工作挑战
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                        <button id="getStartedBtn" class="bg-white text-blue-600 px-8 py-4 rounded-lg font-semibold hover:bg-gray-100 transition duration-200 text-lg">
+                            <i class="fas fa-rocket mr-2"></i>立即开始
+                        </button>
+                        <a href="/pricing" class="border-2 border-white text-white px-8 py-4 rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition duration-200 text-lg">
+                            <i class="fas fa-tags mr-2"></i>查看定价
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 特性展示 -->
+        <section class="py-20 bg-white">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-16">
+                    <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">为什么选择我们？</h2>
+                    <p class="text-xl text-gray-600 max-w-3xl mx-auto">强大的AI能力，简单的使用体验，让您专注于创造价值</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div class="card-hover bg-gradient-to-br from-blue-50 to-blue-100 p-8 rounded-xl text-center">
+                        <div class="bg-blue-500 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fas fa-brain text-2xl text-white"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-4 text-gray-900">多模型支持</h3>
+                        <p class="text-gray-600">集成GPT、Claude、通义千问等多种先进AI模型，满足不同场景需求</p>
+                    </div>
+                    <div class="card-hover bg-gradient-to-br from-green-50 to-green-100 p-8 rounded-xl text-center">
+                        <div class="bg-green-500 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fas fa-shield-alt text-2xl text-white"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-4 text-gray-900">安全可靠</h3>
+                        <p class="text-gray-600">企业级安全保障，数据加密传输，隐私保护，让您安心使用</p>
+                    </div>
+                    <div class="card-hover bg-gradient-to-br from-purple-50 to-purple-100 p-8 rounded-xl text-center">
+                        <div class="bg-purple-500 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fas fa-code text-2xl text-white"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-4 text-gray-900">API集成</h3>
+                        <p class="text-gray-600">标准OpenAI API接口，轻松集成到您的应用中，快速上手</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 统计数据 -->
+        <section class="py-20 bg-gray-50">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+                    <div class="fade-in">
+                        <div class="text-4xl font-bold text-blue-600 mb-2">10+</div>
+                        <div class="text-gray-600">AI模型</div>
+                    </div>
+                    <div class="fade-in">
+                        <div class="text-4xl font-bold text-green-600 mb-2">99.9%</div>
+                        <div class="text-gray-600">可用性</div>
+                    </div>
+                    <div class="fade-in">
+                        <div class="text-4xl font-bold text-purple-600 mb-2">24/7</div>
+                        <div class="text-gray-600">技术支持</div>
+                    </div>
+                    <div class="fade-in">
+                        <div class="text-4xl font-bold text-orange-600 mb-2">1000+</div>
+                        <div class="text-gray-600">企业用户</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 使用场景 -->
+        <section class="py-20 bg-white">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-16">
+                    <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">适用场景</h2>
+                    <p class="text-xl text-gray-600">无论您是个人用户还是企业团队，都能找到合适的解决方案</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="card-hover p-6 border border-gray-200 rounded-lg">
+                        <i class="fas fa-pen-fancy text-3xl text-blue-500 mb-4"></i>
+                        <h3 class="font-semibold mb-2">内容创作</h3>
+                        <p class="text-gray-600 text-sm">文章写作、营销文案、创意策划</p>
+                    </div>
+                    <div class="card-hover p-6 border border-gray-200 rounded-lg">
+                        <i class="fas fa-code text-3xl text-green-500 mb-4"></i>
+                        <h3 class="font-semibold mb-2">编程开发</h3>
+                        <p class="text-gray-600 text-sm">代码生成、调试、技术咨询</p>
+                    </div>
+                    <div class="card-hover p-6 border border-gray-200 rounded-lg">
+                        <i class="fas fa-chart-line text-3xl text-purple-500 mb-4"></i>
+                        <h3 class="font-semibold mb-2">数据分析</h3>
+                        <p class="text-gray-600 text-sm">报告生成、趋势分析、决策支持</p>
+                    </div>
+                    <div class="card-hover p-6 border border-gray-200 rounded-lg">
+                        <i class="fas fa-graduation-cap text-3xl text-orange-500 mb-4"></i>
+                        <h3 class="font-semibold mb-2">学习教育</h3>
+                        <p class="text-gray-600 text-sm">知识问答、学习辅导、技能提升</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA区域 -->
+        <section class="py-20 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <h2 class="text-3xl md:text-4xl font-bold mb-6">准备好开始了吗？</h2>
+                <p class="text-xl mb-8 text-blue-100">立即注册，体验强大的AI助手，提升您的工作效率</p>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                    <button id="ctaStartBtn" class="bg-white text-blue-600 px-8 py-4 rounded-lg font-semibold hover:bg-gray-100 transition duration-200 text-lg">
+                        <i class="fas fa-user-plus mr-2"></i>免费注册
+                    </button>
+                    <a href="/pricing" class="border-2 border-white text-white px-8 py-4 rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition duration-200 text-lg">
+                        <i class="fas fa-info-circle mr-2"></i>了解更多
+                    </a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="utils.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

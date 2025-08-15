@@ -1,3 +1,6 @@
 .env
 data
 storage
+llm-member
+__debug*
+__pycache__

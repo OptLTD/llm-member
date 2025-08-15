@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.AppName}} - 价格方案</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .pricing-card {
+            transition: all 0.3s ease;
+        }
+        .pricing-card:hover {
+            transform: scale(1.05);
+        }
+        .nav-link {
+            transition: all 0.3s ease;
+        }
+        .nav-link:hover {
+            color: #667eea;
+        }
+        .fade-in {
+            animation: fadeIn 0.6s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 导航栏 -->
+    <nav class="bg-white shadow-lg fixed w-full top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <a class="flex-shrink-0" href="/">
+                        <i class="fas fa-robot text-2xl text-blue-600"></i>
+                        <span class="ml-2 text-xl font-bold text-gray-800">{{.AppName}}</span>
+                    </a>
+                    <div class="hidden md:ml-10 md:flex md:space-x-8">
+                        <a href="/" class="nav-link text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium">首页</a>
+                        <a href="/pricing" class="nav-link text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium">定价</a>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <button id="signInBtn" class="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium">
+                        <i class="fas fa-sign-in-alt mr-1"></i>{{.T.SignInButton}}
+                    </button>
+                    <!-- 用户菜单（登录后显示） -->
+                    <div id="userMenu" class="hidden relative">
+                        <button id="userMenuBtn" class="flex items-center text-gray-700 hover:text-blue-600">
+                            <i class="fas fa-user-circle text-xl mr-2"></i>
+                            <span id="userName"></span>
+                            <i class="fas fa-chevron-down ml-1"></i>
+                        </button>
+                        <div id="userDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                            <a href="/profile" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-user mr-2"></i>{{.T.Profile}}
+                            </a>
+                            <a href="/profile#usage" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-chart-bar mr-2"></i>{{.T.UsageStats}}
+                            </a>
+                            <a href="/profile#api-keys" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-key mr-2"></i>{{.T.APIKeys}}
+                            </a>
+                            <div class="border-t border-gray-100"></div>
+                            <button id="signOutBtn" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-sign-out-alt mr-2"></i>{{.T.SignOut}}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容区域 -->
+    <main class="pt-16">
+        <!-- 页面标题 -->
+        <section class="gradient-bg text-white py-16">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <div class="fade-in">
+                    <h1 class="text-4xl font-bold mb-4">选择适合您的套餐</h1>
+                    <p class="text-xl max-w-3xl mx-auto">灵活的定价方案，满足不同规模的需求</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 定价部分 -->
+        <section id="pricing" class="py-20 bg-white">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div id="pricingPlans" class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <!-- 价格方案将通过JavaScript动态加载 -->
+                    <div class="text-center py-20">
+                        <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-4"></i>
+                        <p class="text-gray-600">正在加载价格信息...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="utils.js"></script>
+    <script src="pricing.js"></script>
+</body>
+</html>

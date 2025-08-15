@@ -1,0 +1,318 @@
+# 通用词条
+
+[Welcome]
+other = "欢迎"
+
+[SignIn]
+other = "登录"
+
+[SignUp]
+other = "注册"
+
+[SignOut]
+other = "退出登录"
+
+[Profile]
+other = "个人中心"
+
+[Payment]
+other = "付费中心"
+
+[Admin]
+other = "管理后台"
+
+[Home]
+other = "首页"
+
+[Back]
+other = "返回"
+
+[Submit]
+other = "提交"
+
+[Cancel]
+other = "取消"
+
+[Confirm]
+other = "确认"
+
+[Save]
+other = "保存"
+
+[Delete]
+other = "删除"
+
+[Edit]
+other = "编辑"
+
+[Add]
+other = "添加"
+
+[Search]
+other = "搜索"
+
+[Loading]
+other = "加载中..."
+
+[Success]
+other = "成功"
+
+[Error]
+other = "错误"
+
+[Warning]
+other = "警告"
+
+[Info]
+other = "信息"
+
+[Next]
+other = "下一步"
+
+[Previous]
+other = "上一步"
+
+[Or]
+other = "或"
+
+# 占位符
+[UsernamePlaceholder]
+other = "请输入用户名（3-50个字符）"
+
+[EmailPlaceholder]
+other = "请输入邮箱地址（可选）"
+
+[PhonePlaceholder]
+other = "请输入手机号码（可选）"
+
+[PasswordPlaceholder]
+other = "请输入密码（至少6位）"
+
+[ConfirmPasswordPlaceholder]
+other = "请再次输入密码"
+
+# 提示信息
+[UsernameHint]
+other = "用户名将作为您的唯一标识"
+
+[ContactHint]
+other = "邮箱和手机号至少填写一项"
+
+[PasswordMismatch]
+other = "两次输入的密码不一致"
+
+# 第三方注册
+[RegisterWithGoogle]
+other = "使用 Google 注册"
+
+[RegisterWithGitHub]
+other = "使用 GitHub 注册"
+
+# 登录页面
+[SignInTitle]
+other = "登录"
+
+[Username]
+other = "用户名"
+
+[Email]
+other = "邮箱"
+
+[Phone]
+other = "手机号"
+
+[Password]
+other = "密码"
+
+[ConfirmPassword]
+other = "确认密码"
+
+[RememberMe]
+other = "记住我"
+
+[ForgotPassword]
+other = "忘记密码？"
+
+[SignInButton]
+other = "登录"
+
+[NoAccount]
+other = "还没有账号？"
+
+[RegisterNow]
+other = "立即注册"
+
+[SignInWith]
+other = "使用以下方式登录"
+
+[GoogleLogin]
+other = "Google 登录"
+
+[GitHubLogin]
+other = "GitHub 登录"
+
+# 注册页面
+[RegisterTitle]
+other = "注册"
+
+[RegisterButton]
+other = "注册"
+
+[AlreadyHaveAccount]
+other = "已有账号？"
+
+[SignInNow]
+other = "立即登录"
+
+[PasswordStrength]
+other = "密码强度"
+
+[WeakPassword]
+other = "弱"
+
+[MediumPassword]
+other = "中"
+
+[StrongPassword]
+other = "强"
+
+[AgreeTerms]
+other = "我同意"
+
+[TermsOfService]
+other = "服务条款"
+
+[And]
+other = "和"
+
+[PrivacyPolicy]
+other = "隐私政策"
+
+# 个人中心页面
+[ProfileTitle]
+other = "个人中心"
+
+[PersonalInfo]
+other = "个人资料"
+
+[UsageStats]
+other = "使用统计"
+
+[APIKeys]
+other = "API密钥"
+
+[PlanManagement]
+other = "套餐管理"
+
+[AccountSettings]
+other = "账户设置"
+
+[SecuritySettings]
+other = "安全设置"
+
+# 付费中心页面
+[PaymentTitle]
+other = "付费中心"
+
+[SelectPlan]
+other = "选择套餐"
+
+[SelectPaymentMethod]
+other = "选择支付方式"
+
+[OrderSummary]
+other = "订单摘要"
+
+[SelectedPlan]
+other = "已选套餐"
+
+[Amount]
+other = "金额"
+
+[TotalAmount]
+other = "总金额"
+
+[PayNow]
+other = "立即支付"
+
+[CustomAmount]
+other = "自定义金额"
+
+[MinAmount]
+other = "最低充值金额为10元"
+
+# 管理后台页面
+[AdminTitle]
+other = "管理后台"
+
+[Dashboard]
+other = "仪表板"
+
+[ChatTest]
+other = "聊天测试"
+
+[RequestLogs]
+other = "请求日志"
+
+[UserManagement]
+other = "会员管理"
+
+[ModelManagement]
+other = "模型管理"
+
+[SystemSettings]
+other = "系统设置"
+
+[PricingPlans]
+other = "付费方案"
+
+# 首页
+[IndexTitle]
+other = "首页"
+
+[Features]
+other = "功能特性"
+
+[Pricing]
+other = "价格方案"
+
+[GetStarted]
+other = "开始使用"
+
+[LearnMore]
+other = "了解更多"
+
+# 错误消息
+[InvalidCredentials]
+other = "用户名或密码错误"
+
+[NetworkError]
+other = "网络错误，请重试"
+
+[ServerError]
+other = "服务器错误"
+
+[ValidationError]
+other = "输入验证失败"
+
+[Unauthorized]
+other = "未授权访问"
+
+[NotFound]
+other = "页面未找到"
+
+# 成功消息
+[SignInSuccess]
+other = "登录成功"
+
+[SignUpSuccess]
+other = "注册成功"
+
+[SaveSuccess]
+other = "保存成功"
+
+[UpdateSuccess]
+other = "更新成功"
+
+[DeleteSuccess]
+other = "删除成功"

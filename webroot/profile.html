@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.T.ProfileTitle}} - {{.AppName}}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .sidebar-transition {
+            transition: transform 0.3s ease-in-out;
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .tab-active {
+            border-bottom: 2px solid #3B82F6;
+            color: #3B82F6;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 导航栏 -->
+    <nav class="bg-white shadow-lg fixed w-full top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <a href="/" class="flex items-center">
+                        <i class="fas fa-robot text-2xl text-blue-600"></i>
+                        <span class="ml-2 text-xl font-bold text-gray-800">{{.AppName}}</span>
+                    </a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="relative">
+                        <button id="userMenuBtn" class="flex items-center text-gray-700 hover:text-blue-600">
+                            <i class="fas fa-user-circle text-xl mr-2"></i>
+                            <span id="userName">用户名</span>
+                            <i class="fas fa-chevron-down ml-2"></i>
+                        </button>
+                        <div id="userDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                            <a href="/" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-home mr-2"></i>返回首页
+                            </a>
+                            <div class="border-t border-gray-100"></div>
+                            <button id="signOutBtn" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-sign-out-alt mr-2"></i>{{.T.SignOut}}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容 -->
+    <div class="pt-16 min-h-screen">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="flex flex-col lg:flex-row gap-8">
+                <!-- 侧边栏 -->
+                <div class="lg:w-1/4">
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <div class="text-center mb-6">
+                            <div  id="sidebarAvatar" class="cursor-pointer w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-user text-3xl text-blue-600 "></i>
+                            </div>
+                            <h3 class="text-xl font-semibold text-gray-900 text-center">
+                                <span id="sidebarUserName" class="inline-block align-middle text-lg cursor-pointer">用户名</span>
+                                <span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full ml-2 align-middle" id="userPlan">
+                                    专业版
+                                </span>
+                            </h3>
+                            <p class="text-gray-600" id="sidebarUserEmail">user@example.com</p>
+                            
+                        </div>
+                        <!-- 在侧边栏导航中移除个人资料按钮 -->
+                        <nav class="space-y-2">
+                            <!-- 移除这一行：
+                            <button class="tab-btn w-full text-left px-4 py-2 rounded-lg hover:bg-gray-100" data-tab="profile">
+                                <i class="fas fa-user mr-3"></i>个人资料
+                            </button>
+                            -->
+                            <button class="tab-btn w-full text-left px-4 py-2 rounded-lg hover:bg-gray-100 tab-active" data-tab="usage">
+                                <i class="fas fa-chart-bar mr-3"></i>使用统计
+                            </button>
+                            <button class="tab-btn w-full text-left px-4 py-2 rounded-lg hover:bg-gray-100" data-tab="api-keys">
+                                <i class="fas fa-key mr-3"></i>API密钥
+                            </button>
+                            <button class="tab-btn w-full text-left px-4 py-2 rounded-lg hover:bg-gray-100" data-tab="billing">
+                                <i class="fas fa-credit-card mr-3"></i>套餐管理
+                            </button>
+                        </nav>
+                    </div>
+                </div>
+
+                <!-- 主内容区域 -->
+                <div class="lg:w-3/4">
+                    <!-- 个人资料标签页 -->
+                    <div id="profile-tab" class="tab-content hidden">
+                        <div class="bg-white rounded-lg shadow-lg p-6">
+                            <h2 class="text-2xl font-bold text-gray-900 mb-6">个人资料</h2>
+                            <form id="profileForm">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">用户名</label>
+                                        <input type="text" id="profileUsername" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500" readonly>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">邮箱</label>
+                                        <input type="email" id="profileEmail" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">注册时间</label>
+                                        <input type="text" id="profileCreatedAt" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50" readonly>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">账户状态</label>
+                                        <span id="profileStatus" class="inline-block bg-green-100 text-green-800 text-sm px-3 py-1 rounded-full">正常</span>
+                                    </div>
+                                </div>
+                                <div class="mt-6">
+                                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition duration-200">
+                                        <i class="fas fa-save mr-2"></i>保存更改
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- 使用统计标签页 -->
+                    <div id="usage-tab" class="tab-content">
+                        <div class="space-y-6">
+                            <!-- 统计卡片 -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div class="bg-white rounded-lg shadow-lg p-6 card-hover">
+                                    <div class="flex items-center">
+                                        <div class="bg-blue-100 p-3 rounded-full">
+                                            <i class="fas fa-comments text-blue-600 text-xl"></i>
+                                        </div>
+                                        <div class="ml-4">
+                                            <p class="text-sm text-gray-600">总请求数</p>
+                                            <p class="text-2xl font-bold text-gray-900" id="totalRequests">0</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-white rounded-lg shadow-lg p-6 card-hover">
+                                    <div class="flex items-center">
+                                        <div class="bg-green-100 p-3 rounded-full">
+                                            <i class="fas fa-coins text-green-600 text-xl"></i>
+                                        </div>
+                                        <div class="ml-4">
+                                            <p class="text-sm text-gray-600">总Token数</p>
+                                            <p class="text-2xl font-bold text-gray-900" id="totalTokens">0</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-white rounded-lg shadow-lg p-6 card-hover">
+                                    <div class="flex items-center">
+                                        <div class="bg-purple-100 p-3 rounded-full">
+                                            <i class="fas fa-chart-line text-purple-600 text-xl"></i>
+                                        </div>
+                                        <div class="ml-4">
+                                            <p class="text-sm text-gray-600">当前套餐</p>
+                                            <p class="text-lg font-bold text-gray-900" id="currentPlan">专业版</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 使用限制 -->
+                            <div class="bg-white rounded-lg shadow-lg p-6">
+                                <h3 class="text-xl font-bold text-gray-900 mb-4">使用限制</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <div class="flex justify-between items-center mb-2">
+                                            <span class="text-sm text-gray-600">每日限制</span>
+                                            <span class="text-sm text-gray-900" id="dailyUsage">0 / 1000</span>
+                                        </div>
+                                        <div class="w-full bg-gray-200 rounded-full h-2">
+                                            <div class="bg-blue-600 h-2 rounded-full" id="dailyProgress" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="flex justify-between items-center mb-2">
+                                            <span class="text-sm text-gray-600">每月限制</span>
+                                            <span class="text-sm text-gray-900" id="monthlyUsage">0 / 10000</span>
+                                        </div>
+                                        <div class="w-full bg-gray-200 rounded-full h-2">
+                                            <div class="bg-green-600 h-2 rounded-full" id="monthlyProgress" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- API密钥标签页 -->
+                    <div id="api-keys-tab" class="tab-content hidden">
+                        <div class="bg-white rounded-lg shadow-lg p-6">
+                            <div class="flex justify-between items-center mb-6">
+                                <h2 class="text-2xl font-bold text-gray-900">API密钥管理</h2>
+                                <button id="regenerateApiKeyBtn" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition duration-200">
+                                    <i class="fas fa-sync-alt mr-2"></i>重新生成
+                                </button>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex-1">
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">API密钥</label>
+                                        <div class="flex items-center space-x-2">
+                                            <input type="password" id="apiKeyDisplay" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white" readonly>
+                                            <button id="toggleApiKeyBtn" class="px-3 py-2 text-gray-600 hover:text-gray-800">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <button id="copyApiKeyBtn" class="px-3 py-2 text-blue-600 hover:text-blue-800">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                <div class="flex">
+                                    <i class="fas fa-exclamation-triangle text-yellow-600 mt-1 mr-3"></i>
+                                    <div>
+                                        <h4 class="text-sm font-medium text-yellow-800">安全提示</h4>
+                                        <p class="text-sm text-yellow-700 mt-1">
+                                            请妥善保管您的API密钥，不要在公开场所分享。如果密钥泄露，请立即重新生成。
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 套餐管理标签页 -->
+                    <div id="billing-tab" class="tab-content hidden">
+                        <div class="space-y-6">
+                            <!-- 当前套餐 -->
+                            <div class="bg-white rounded-lg shadow-lg p-6">
+                                <div class="flex justify-between items-center mb-6">
+                                    <h2 class="text-2xl font-bold text-gray-900">当前套餐</h2>
+                                    <button id="goToPaymentBtn" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition duration-200">
+                                        <i class="fas fa-credit-card mr-2"></i>充值/升级
+                                    </button>
+                                </div>
+                                <div class="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-blue-900" id="currentPlanName">专业版</h3>
+                                        <p class="text-blue-700" id="currentPlanDesc">500万 tokens/月，所有模型访问</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-2xl font-bold text-blue-900">¥299</p>
+                                        <p class="text-sm text-blue-700">/月</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 余额信息 -->
+                            <div class="bg-white rounded-lg shadow-lg p-6">
+                                <h3 class="text-xl font-bold text-gray-900 mb-4">账户余额</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div class="bg-green-50 rounded-lg p-4">
+                                        <div class="flex items-center">
+                                            <div class="bg-green-100 p-3 rounded-full">
+                                                <i class="fas fa-wallet text-green-600 text-xl"></i>
+                                            </div>
+                                            <div class="ml-4">
+                                                <p class="text-sm text-gray-600">可用余额</p>
+                                                <p class="text-2xl font-bold text-green-900" id="accountBalance">¥0.00</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-blue-50 rounded-lg p-4">
+                                        <div class="flex items-center">
+                                            <div class="bg-blue-100 p-3 rounded-full">
+                                                <i class="fas fa-coins text-blue-600 text-xl"></i>
+                                            </div>
+                                            <div class="ml-4">
+                                                <p class="text-sm text-gray-600">剩余Token</p>
+                                                <p class="text-2xl font-bold text-blue-900" id="remainingTokens">0</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 升级套餐, 套餐选项将通过JavaScript动态加载 -->
+                            <!-- <div class="bg-white rounded-lg shadow-lg p-6">
+                                <h3 class="text-xl font-bold text-gray-900 mb-4">升级套餐</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="upgradeOptions">
+                                </div>
+                            </div> -->
+
+                            <!-- 订单历史 -->
+                            <div class="bg-white rounded-lg shadow-lg p-6">
+                                <h3 class="text-xl font-bold text-gray-900 mb-4">订单历史</h3>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm text-left">
+                                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                            <tr>
+                                                <th class="px-6 py-3">订单号</th>
+                                                <th class="px-6 py-3">套餐</th>
+                                                <th class="px-6 py-3">金额</th>
+                                                <th class="px-6 py-3">状态</th>
+                                                <th class="px-6 py-3">时间</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="orderHistory">
+                                            <!-- 订单历史将通过JavaScript动态加载 -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 个人资料弹窗模态框 -->
+    <div id="profileModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-semibold text-gray-900">个人资料</h3>
+                    <button id="closeProfileModal" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">用户名</label>
+                        <input type="text" id="modalProfileUsername" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50" readonly>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">邮箱</label>
+                        <input type="email" id="modalProfileEmail" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">注册时间</label>
+                        <input type="text" id="modalProfileCreatedAt" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50" readonly>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button id="cancelProfileEdit" class="px-4 py-2 text-gray-600 hover:text-gray-800">取消</button>
+                    <button id="saveProfileBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="utils.js"></script>
+    <script src="profile.js"></script>
+</body>
+</html>

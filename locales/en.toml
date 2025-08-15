@@ -1,0 +1,371 @@
+[Welcome]
+other = "Welcome"
+
+[SignIn]
+other = "Sign In"
+
+[SignUp]
+other = "Sign Up"
+
+[SignOut]
+other = "Sign Out"
+
+[Payment]
+other = "Payment"
+
+[Admin]
+other = "Admin"
+
+[Home]
+other = "Home"
+
+[Add]
+other = "Add"
+
+[Search]
+other = "Search"
+
+[Loading]
+other = "Loading..."
+
+[Success]
+other = "Success"
+
+[Error]
+other = "Error"
+
+[Warning]
+other = "Warning"
+
+[Info]
+other = "Info"
+
+# Sign in page
+[SignInTitle]
+other = "Sign In"
+
+[SignInPageTitle]
+other = "Sign In"
+
+[Username]
+other = "Username"
+
+[Email]
+other = "Email"
+
+[Phone]
+other = "Phone"
+
+[Password]
+other = "Password"
+
+[ConfirmPassword]
+other = "Confirm Password"
+
+[RememberMe]
+other = "Remember me"
+
+[ForgotPassword]
+other = "Forgot password?"
+
+[SignInButton]
+other = "Sign In"   
+
+[NoAccount]
+other = "Don't have an account?"
+
+[SignUpNow]
+other = "Sign up now"
+
+[SignInWith]
+other = "Sign In with"
+
+[GoogleLogin]
+other = "Google Login"
+
+[GitHubLogin]
+other = "GitHub Login"
+
+# Sign up page
+[SignUpTitle]
+other = "Sign Up"
+
+[SignUpButton]
+other = "Sign Up"
+
+[SignUpPageTitle]
+other = "Sign Up"
+
+[AlreadyHaveAccount]
+other = "Already have an account?"
+
+[LoginNow]
+other = "Login now"
+
+[PasswordStrength]
+other = "Password Strength"
+
+[WeakPassword]
+other = "Weak"
+
+[MediumPassword]
+other = "Medium"
+
+[StrongPassword]
+other = "Strong"
+
+[AgreeTerms]
+other = "I agree to the"
+
+[TermsOfService]
+other = "Terms of Service"
+
+[And]
+other = "and"
+
+[PrivacyPolicy]
+other = "Privacy Policy"
+
+# Profile page
+[ProfileTitle]
+other = "Profile"
+
+[PersonalInfo]
+other = "Personal Information"
+
+[UsageStats]
+other = "Usage Statistics"
+
+[APIKeys]
+other = "API Keys"
+
+[PlanManagement]
+other = "Plan Management"
+
+[AccountSettings]
+other = "Account Settings"
+
+[SecuritySettings]
+other = "Security Settings"
+
+# Payment page
+[PaymentTitle]
+other = "Payment"
+
+[SelectPlan]
+other = "Select Plan"
+
+[SelectPaymentMethod]
+other = "Select Payment Method"
+
+[OrderSummary]
+other = "Order Summary"
+
+[SelectedPlan]
+other = "Selected Plan"
+
+[Amount]
+other = "Amount"
+
+[TotalAmount]
+other = "Total Amount"
+
+[PayNow]
+other = "Pay Now"
+
+[CustomAmount]
+other = "Custom Amount"
+
+[MinAmount]
+other = "Minimum amount is $10"
+
+# Admin page
+[AdminTitle]
+other = "Admin"
+
+[Dashboard]
+other = "Dashboard"
+
+[ChatTest]
+other = "Chat Test"
+
+[RequestLogs]
+other = "Request Logs"
+
+[UserManagement]
+other = "User Management"
+
+[ModelManagement]
+other = "Model Management"
+
+[SystemSettings]
+other = "System Settings"
+
+[PricingPlans]
+other = "Pricing Plans"
+
+# Index page
+[IndexTitle]
+other = "Home"
+
+[Features]
+other = "Features"
+
+[Pricing]
+other = "Pricing"
+
+[GetStarted]
+other = "Get Started"
+
+[LearnMore]
+other = "Learn More"
+
+# Error messages
+[InvalidCredentials]
+other = "Invalid username or password"
+
+[NetworkError]
+other = "Network error, please try again"
+
+[ServerError]
+other = "Server error"
+
+[ValidationError]
+other = "Validation failed"
+
+[Unauthorized]
+other = "Unauthorized access"
+
+[NotFound]
+other = "Page not found"
+
+# Success messages
+[SignInSuccess]
+other = "Sign in successful"
+
+[RegisterSuccess]
+other = "Registration successful"
+
+[SaveSuccess]
+other = "Save successful"
+
+[UpdateSuccess]
+other = "Update successful"
+
+[DeleteSuccess]
+other = "Delete successful"
+
+# General terms
+[Submit]
+other = "Submit"
+
+[Cancel]
+other = "Cancel"
+
+[Save]
+other = "Save"
+
+[Delete]
+other = "Delete"
+
+[Edit]
+other = "Edit"
+
+[Back]
+other = "Back"
+
+[Next]
+other = "Next"
+
+[Previous]
+other = "Previous"
+
+[Confirm]
+other = "Confirm"
+
+[Or]
+other = "Or"
+
+# Placeholders
+[UsernamePlaceholder]
+other = "Enter username (3-50 characters)"
+
+[EmailPlaceholder]
+other = "Enter email address (optional)"
+
+[PhonePlaceholder]
+other = "Enter phone number (optional)"
+
+[PasswordPlaceholder]
+other = "Enter password (at least 6 characters)"
+
+[ConfirmPasswordPlaceholder]
+other = "Enter password again"
+
+# Hints
+[UsernameHint]
+other = "Username will be your unique identifier"
+
+[ContactHint]
+other = "At least one of email or phone is required"
+
+[PasswordMismatch]
+other = "Passwords do not match"
+
+# Third-party registration
+[RegisterWithGoogle]
+other = "Register with Google"
+
+[RegisterWithGitHub]
+other = "Register with GitHub"
+
+# Home page
+[HomePageTitle]
+other = "Swiflow - AI Service Platform"
+
+[HomeTitle]
+other = "Powerful AI Service Platform"
+
+[HomeDescription]
+other = "Connect to various mainstream AI models, providing stable and efficient API services to empower your AI application development"
+
+[ViewDemo]
+other = "View Demo"
+
+[WhyChooseUs]
+other = "Why Choose SwiFlow"
+
+[PlatformDescription]
+other = "Professional AI service platform providing the best experience for developers"
+
+[HighPerformance]
+other = "High Performance"
+
+[PerformanceDescription]
+other = "Optimized API response speed, supporting high concurrency requests to ensure smooth operation of your applications"
+
+[SecureReliable]
+other = "Secure & Reliable"
+
+[SecurityDescription]
+other = "Enterprise-level security protection, encrypted data transmission, API key management to protect your data security"
+
+[EasyIntegration]
+other = "Easy Integration"
+
+[IntegrationDescription]
+other = "Compatible with OpenAI API format, no need to modify existing code, quickly access various AI models"
+
+# User menu
+[Profile]
+other = "Profile"
+
+# Additional terms
+[CreateAccount]
+other = "Create Account"
+
+[HaveAccount]
+other = "Already have an account?"
+
+[BackToHome]
+other = "Back to Home"

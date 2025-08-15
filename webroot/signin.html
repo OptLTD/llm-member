@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.T.SignInPage}} - {{.AppName}}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .input-focus:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+        .floating-animation {
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen flex items-center justify-center p-4">
+    <!-- 背景装饰 -->
+    <div class="absolute inset-0 overflow-hidden">
+        <div class="absolute -top-40 -right-40 w-80 h-80 bg-white opacity-10 rounded-full floating-animation"></div>
+        <div class="absolute -bottom-40 -left-40 w-96 h-96 bg-white opacity-5 rounded-full floating-animation" style="animation-delay: -3s;"></div>
+        <div class="absolute top-1/2 left-1/4 w-32 h-32 bg-white opacity-10 rounded-full floating-animation" style="animation-delay: -1s;"></div>
+    </div>
+
+    <!-- 登录容器 -->
+    <div class="relative z-10 w-full max-w-md">
+        <!-- 标题 -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-white">{{.T.SignInTitle}}</h1>
+        </div>
+
+        <!-- 登录表单 -->
+        <div class="glass-effect rounded-2xl shadow-2xl p-8 backdrop-blur-md bg-white/10 border border-white/20">
+            <form id="signInForm" class="space-y-6">
+                <!-- 用户名输入 -->
+                <div>
+                    <label for="username" class="block text-sm font-medium text-white mb-2">
+                        <i class="fas fa-user mr-2 text-indigo-300"></i>{{.T.Username}}/{{.T.Email}}/{{.T.Phone}}
+                    </label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none input-focus transition-all duration-300"
+                        placeholder="{{.T.Username}}/{{.T.Email}}/{{.T.Phone}}"
+                    >
+                </div>
+
+                <!-- 密码输入 -->
+                <div>
+                    <label for="password" class="block text-sm font-medium text-white mb-2">
+                        <i class="fas fa-lock mr-2 text-indigo-300"></i>{{.T.Password}}
+                    </label>
+                    <div class="relative">
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none input-focus transition-all duration-300 pr-12"
+                            placeholder="{{.T.Password}}"
+                        >
+                        <button 
+                            type="button" 
+                            id="togglePassword" 
+                            class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                        >
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 记住我和忘记密码 -->
+                <div class="flex items-center justify-between">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="rememberMe" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                        <span class="ml-2 text-sm text-white">{{.T.RememberMe}}</span>
+                    </label>
+                    <a href="#" class="text-sm text-indigo-300 hover:text-indigo-200 transition-colors">{{.T.ForgotPassword}}</a>
+                </div>
+
+                <!-- 登录按钮 -->
+                <button 
+                    type="submit" 
+                    class="w-full btn-primary text-white py-3 px-4 rounded-lg font-medium focus:outline-none focus:ring-4 focus:ring-indigo-300"
+                >
+                    <i class="fas fa-sign-in-alt mr-2"></i>{{.T.SignInButton}}
+                </button>
+            </form>
+
+            <!-- 分割线 -->
+            <div class="my-6 flex items-center">
+                <div class="flex-1 border-t border-white/30"></div>
+                <span class="px-4 text-sm text-white">或</span>
+                <div class="flex-1 border-t border-white/30"></div>
+            </div>
+
+            <!-- 第三方登录 -->
+            <div class="space-y-3">
+                <button class="w-full flex items-center justify-center px-4 py-3 border border-white/30 rounded-lg hover:bg-white/10 transition-colors backdrop-blur-sm">
+                    <i class="fab fa-google text-red-400 mr-3"></i>
+                    <span class="text-white">使用 Google 登录</span>
+                </button>
+                <button class="w-full flex items-center justify-center px-4 py-3 border border-white/30 rounded-lg hover:bg-white/10 transition-colors backdrop-blur-sm">
+                    <i class="fab fa-github text-white mr-3"></i>
+                    <span class="text-white">使用 GitHub 登录</span>
+                </button>
+            </div>
+
+            <!-- 底部导航 -->
+            <div class="pt-6">
+                <div class="flex justify-between items-center">
+                    <a href="/" class="text-white hover:text-indigo-200 transition-colors">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        返回首页
+                    </a>
+                    <p class="text-white">
+                        {{.T.NoAccount}}
+                        <a href="/signup" class="text-indigo-300 hover:text-indigo-200 font-medium transition-colors">{{.T.SigninNow}}</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知容器 -->
+    <div id="notification-container" class="fixed top-4 right-4 z-50"></div>
+
+    <script>
+        // 全局状态
+        const SignInApp = {
+            isLoading: false
+        };
+
+        // 工具函数
+        const Utils = {
+            // 显示通知
+            showNotification(message, type = 'info') {
+                const container = document.getElementById('notification-container');
+                const notification = document.createElement('div');
+                notification.className = `p-4 rounded-lg shadow-lg mb-4 transform transition-all duration-300 translate-x-full ${
+                    type === 'success' ? 'bg-green-500' :
+                    type === 'error' ? 'bg-red-500' :
+                    type === 'warning' ? 'bg-yellow-500' :
+                    'bg-blue-500'
+                } text-white`;
+                
+                notification.innerHTML = `
+                    <div class="flex items-center">
+                        <i class="fas ${
+                            type === 'success' ? 'fa-check-circle' :
+                            type === 'error' ? 'fa-exclamation-circle' :
+                            type === 'warning' ? 'fa-exclamation-triangle' :
+                            'fa-info-circle'
+                        } mr-2"></i>
+                        <span>${message}</span>
+                        <button class="ml-4 text-white hover:text-gray-200" onclick="this.parentElement.parentElement.remove()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                
+                container.appendChild(notification);
+                
+                // 动画显示
+                setTimeout(() => {
+                    notification.classList.remove('translate-x-full');
+                }, 100);
+                
+                // 自动移除
+                setTimeout(() => {
+                    notification.classList.add('translate-x-full');
+                    setTimeout(() => {
+                        if (notification.parentElement) {
+                            notification.remove();
+                        }
+                    }, 300);
+                }, 5000);
+            },
+
+            // API 请求
+            async apiRequest(url, options = {}) {
+                const defaultOptions = {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                };
+
+                const response = await fetch(url, {
+                    ...defaultOptions,
+                    ...options,
+                    headers: {
+                        ...defaultOptions.headers,
+                        ...options.headers
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || '请求失败');
+                }
+                
+                return data;
+            }
+        };
+
+        // 登录处理
+        async function handleSignin(username, password) {
+            try {
+                SignInApp.isLoading = true;
+                updateSignInButton(true);
+
+                const data = await Utils.apiRequest('/api/signin', {
+                    body: JSON.stringify({ username, password })
+                });
+                
+                // 存储登录信息
+                localStorage.setItem('userToken', data.token);
+                localStorage.setItem('userData', JSON.stringify(data.user));
+                Utils.showNotification('登录成功！正在跳转...', 'success');
+                setTimeout(() => {
+                    const prevPage = localStorage.getItem('prevPage');
+                    if (prevPage === '/payment') {
+                        localStorage.removeItem('prevPage');
+                        window.location.href = '/payment';
+                    } else {
+                        localStorage.removeItem('prevPage');
+                        window.location.href = '/profile';
+                    }
+                }, 1200);
+                
+            } catch (error) {
+                Utils.showNotification(error.message, 'error');
+            } finally {
+                SignInApp.isLoading = false;
+                updateSignInButton(false);
+            }
+        }
+
+        // 更新登录按钮状态
+        function updateSignInButton(loading) {
+            const button = document.querySelector('#signInForm button[type="submit"]');
+            if (loading) {
+                button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>{{.T.SigningIn}}';
+                button.disabled = true;
+            } else {
+                button.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>{{.T.SignIn}}';
+                button.disabled = false;
+            }
+        }
+
+        // 事件监听器
+        function setupEventListeners() {
+            // 登录表单提交
+            document.getElementById('signInForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const username = document.getElementById('username').value.trim();
+                const password = document.getElementById('password').value;
+                
+                if (!username || !password) {
+                    Utils.showNotification('请填写完整的登录信息', 'warning');
+                    return;
+                }
+                
+                await handleSignin(username, password);
+            });
+
+            // 密码显示/隐藏切换
+            document.getElementById('togglePassword').addEventListener('click', () => {
+                const passwordInput = document.getElementById('password');
+                const toggleIcon = document.querySelector('#togglePassword i');
+                
+                if (passwordInput.type === 'password') {
+                    passwordInput.type = 'text';
+                    toggleIcon.className = 'fas fa-eye-slash';
+                } else {
+                    passwordInput.type = 'password';
+                    toggleIcon.className = 'fas fa-eye';
+                }
+            });
+
+            // 输入框焦点效果
+            document.querySelectorAll('input').forEach(input => {
+                input.addEventListener('focus', () => {
+                    input.parentElement.classList.add('ring-2', 'ring-indigo-500', 'ring-opacity-50');
+                });
+                
+                input.addEventListener('blur', () => {
+                    input.parentElement.classList.remove('ring-2', 'ring-indigo-500', 'ring-opacity-50');
+                });
+            });
+        }
+
+        // 检查是否已登录
+        function checkExistingSignin() {
+            const token = localStorage.getItem('userToken');
+            if (token) {
+                Utils.showNotification('您已登录，正在跳转...', 'info');
+                setTimeout(() => {
+                    window.location.href = '/profile';
+                }, 1000);
+            }
+        }
+
+        // 页面初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            checkExistingSignin();
+            setupEventListeners();
+            
+            // 聚焦到用户名输入框
+            document.getElementById('username').focus();
+        });
+    </script>
+</body>
+</html>
