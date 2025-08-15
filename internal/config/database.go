@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"llm-member/internal/model"
 	"llm-member/internal/support"
 
+	"github.com/glebarez/sqlite"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -73,18 +74,20 @@ func createDefaultAdmin(db *gorm.DB) error {
 	}
 
 	// 创建默认管理员
+	expired_at := time.Now().AddDate(99, 0, 0)
 	admin := model.UserModel{
 		Email: "admin@demo.com", Username: "admin",
-		IsActive: true, CurrRole: model.RoleAdmin,
 		DailyLimit: 10000, MonthlyLimit: 100000,
+		IsActive: true, CurrRole: model.RoleAdmin,
+		Verified: true, ExpiredAt: &expired_at,
 	}
 
 	// 生成密码哈希
 	pass, cost := []byte("admin123"), bcrypt.DefaultCost
-	if pass, err := bcrypt.GenerateFromPassword(pass, cost); err != nil {
+	if data, err := bcrypt.GenerateFromPassword(pass, cost); err != nil {
 		return fmt.Errorf("failed to hash password: %v", err)
 	} else {
-		admin.Password = string(pass)
+		admin.Password = string(data)
 	}
 
 	// 生成 API Key

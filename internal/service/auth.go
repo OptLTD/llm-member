@@ -55,11 +55,6 @@ func (s *AuthService) SignIn(username, password string) (string, *model.UserMode
 		return "", nil, fmt.Errorf("用户名或密码错误")
 	}
 
-	// 验证密码
-	if !s.userService.ValidatePassword(user.Password, password) {
-		return "", nil, fmt.Errorf("用户名或密码错误")
-	}
-
 	// 检查用户是否激活
 	if !user.IsActive {
 		return "", nil, fmt.Errorf("用户账户已被禁用")
@@ -68,6 +63,11 @@ func (s *AuthService) SignIn(username, password string) (string, *model.UserMode
 	// 检查用户是否激活
 	if !user.Verified {
 		return "", nil, fmt.Errorf("未验证用户账户")
+	}
+
+	// 验证密码
+	if !s.userService.ValidatePassword(user.Password, password) {
+		return "", nil, fmt.Errorf("用户名或密码错误")
 	}
 
 	// 生成 token

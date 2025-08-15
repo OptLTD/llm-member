@@ -195,7 +195,7 @@ func GetPaymentProviders() []PaymentProvider {
 	var providers []PaymentProvider
 
 	// 支付宝
-	if mode := getEnv("GIN_MODE", "debug"); mode != "release" {
+	if mode := getEnv("GIN_MODE", ""); mode != "release" {
 		providers = append(providers, PaymentProvider{
 			Name: "mock", AppID: mode, Enabled: true,
 		})

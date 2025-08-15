@@ -16,7 +16,7 @@ import (
 func main() {
 	// 加载环境变量
 	if err := godotenv.Load(); err != nil {
-		panic("Warning: .env file not found")
+		log.Println("Warning: .env file not found")
 	}
 
 	// 初始化配置（包含日志配置）

@@ -144,6 +144,7 @@ func (h *AuthHandle) UserSignIn(c *gin.Context) {
 	// 生成 token
 	token, _, err := h.authService.SignIn(user.Username, req.Password)
 	if err != nil {
+		log.Println("SignIn failed:", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成token失败"})
 		return
 	}
