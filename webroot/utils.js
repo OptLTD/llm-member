@@ -183,6 +183,71 @@ const Utils = {
   formatDate(dateString) {
     return new Date(dateString).toLocaleString("zh-CN");
   },
+
+  // 检查密码强度
+  checkPasswordStrength(password) {
+    if (!password) {
+      return { strength: 0, feedback: '请输入密码' };
+    }
+
+    let score = 0;
+    const feedback = [];
+
+    // 长度检查
+    if (password.length >= 8) {
+      score += 1;
+    } else {
+      feedback.push('密码长度至少8位');
+    }
+
+    // 包含小写字母
+    if (/[a-z]/.test(password)) {
+      score += 1;
+    } else {
+      feedback.push('包含小写字母');
+    }
+
+    // 包含大写字母
+    if (/[A-Z]/.test(password)) {
+      score += 1;
+    } else {
+      feedback.push('包含大写字母');
+    }
+
+    // 包含数字
+    if (/\d/.test(password)) {
+      score += 1;
+    } else {
+      feedback.push('包含数字');
+    }
+
+    // 包含特殊字符
+    if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      score += 1;
+    } else {
+      feedback.push('包含特殊字符');
+    }
+
+    // 根据得分返回强度等级和反馈
+    const strengthLevels = [
+      { level: 0, text: '非常弱', color: 'red' },
+      { level: 1, text: '弱', color: 'orange' },
+      { level: 2, text: '一般', color: 'yellow' },
+      { level: 3, text: '良好', color: 'blue' },
+      { level: 4, text: '强', color: 'green' },
+      { level: 5, text: '非常强', color: 'green' }
+    ];
+
+    const strengthInfo = strengthLevels[score];
+    
+    return {
+      strength: score,
+      level: strengthInfo.level,
+      text: strengthInfo.text,
+      color: strengthInfo.color,
+      feedback: feedback.length > 0 ? `建议: ${feedback.join('、')}` : '密码强度良好'
+    };
+  },
 };
 
 // 事件监听器管理

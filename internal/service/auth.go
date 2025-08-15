@@ -92,7 +92,7 @@ func (s *AuthService) SignIn(username, password string) (string, *model.UserMode
 
 // VerifyEmail verifies a user's email address.
 func (s *AuthService) VerifyEmail(code string) error {
-	var reset model.TokenModel
+	var reset model.VerifyModel
 	var query = s.db.Where("token = ?", code)
 	if err := query.First(&reset).Error; err != nil {
 		return fmt.Errorf("无效的验证码")
@@ -154,13 +154,20 @@ func (s *AuthService) SignUp(req *model.SignUpRequest) (*model.UserModel, error)
 	return user, nil
 }
 
-func (s *AuthService) GenerateSignupToken(email string) (*model.TokenModel, error) {
-	reset := &model.TokenModel{Email: email}
+func (s *AuthService) DeleteSignup(user *model.UserModel) error {
+	return s.userService.DeleteUser(user.ID)
+}
+
+func (s *AuthService) GenerateSignupToken(email string) (*model.VerifyModel, error) {
+	reset := &model.VerifyModel{Email: email}
 	if token, err := s.generateToken(); err != nil {
 		return nil, fmt.Errorf("验证码生成失败: %v", err)
 	} else {
 		reset.Token = token
 		reset.ExpiredAt = time.Now().Add(10 * time.Minute)
+	}
+	if res := s.db.Create(reset); res.Error != nil {
+		return nil, fmt.Errorf("验证码生成失败: %v", res.Error)
 	}
 	return reset, nil
 }
@@ -230,6 +237,94 @@ func (s *AuthService) generateToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(bytes), nil
+}
+
+// ForgotPassword 忘记密码 - 生成重置token并发送邮件
+func (s *AuthService) ForgotPassword(email string) (*model.VerifyModel, error) {
+	// 检查用户是否存在
+	user, err := s.userService.GetUserByEmail(email)
+	if err != nil {
+		return nil, fmt.Errorf("该邮箱未注册")
+	}
+
+	// 检查用户是否激活
+	if !user.IsActive {
+		return nil, fmt.Errorf("用户账户已被禁用")
+	}
+
+	// 生成重置token
+	reset := &model.VerifyModel{Email: email}
+	if token, err := s.generateToken(); err != nil {
+		return nil, fmt.Errorf("重置码生成失败: %v", err)
+	} else {
+		reset.Token = token
+		reset.ExpiredAt = time.Now().Add(30 * time.Minute) // 30分钟有效期
+	}
+
+	// 删除该邮箱之前的重置记录
+	s.db.Where("email = ?", email).Delete(&model.VerifyModel{})
+
+	// 保存新的重置记录
+	if res := s.db.Create(reset); res.Error != nil {
+		return nil, fmt.Errorf("重置码生成失败: %v", res.Error)
+	}
+
+	return reset, nil
+}
+
+// VerifyResetCode 验证重置码
+func (s *AuthService) VerifyResetCode(code string) (*model.VerifyModel, error) {
+	var reset model.VerifyModel
+	if err := s.db.Where("token = ?", code).First(&reset).Error; err != nil {
+		return nil, fmt.Errorf("无效的重置码")
+	}
+
+	if reset.ExpiredAt.Before(time.Now()) {
+		return nil, fmt.Errorf("重置码已过期")
+	}
+
+	return &reset, nil
+}
+
+// ResetPassword 重置密码
+func (s *AuthService) ResetPassword(code, newPassword string) error {
+	// 验证重置码
+	reset, err := s.VerifyResetCode(code)
+	if err != nil {
+		return err
+	}
+
+	// 获取用户
+	user, err := s.userService.GetUserByEmail(reset.Email)
+	if err != nil {
+		return fmt.Errorf("用户不存在")
+	}
+
+	// 生成新密码哈希
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("密码加密失败: %v", err)
+	}
+
+	// 更新用户密码
+	user.Password = string(hashedPassword)
+	if err := s.db.Save(user).Error; err != nil {
+		return fmt.Errorf("密码更新失败: %v", err)
+	}
+
+	// 删除已使用的重置记录
+	s.db.Delete(reset)
+
+	// 清除该用户的所有登录token（强制重新登录）
+	s.mutex.Lock()
+	for token, tokenInfo := range tokens {
+		if tokenInfo.UserID == user.ID {
+			delete(tokens, token)
+		}
+	}
+	s.mutex.Unlock()
+
+	return nil
 }
 
 // cleanupExpiredTokens 定期清理过期的 token

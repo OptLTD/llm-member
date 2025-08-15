@@ -69,6 +69,8 @@ func StaticRouteHandle(cfg *config.Config) gin.HandlerFunc {
 			RenderPage(c, "signin")
 		case "/signup", "/signup.html":
 			RenderPage(c, "signup")
+		case "/forget", "/forget.html":
+			RenderPage(c, "forget")
 		case "/payment", "/payment.html":
 			RenderPage(c, "payment")
 		case "/profile", "/profile.html":

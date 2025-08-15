@@ -59,23 +59,6 @@
         <!-- 注册表单 -->
         <div class="glass-effect rounded-2xl shadow-2xl p-8">
             <form id="signinForm" class="space-y-6">
-                <!-- 用户名输入 -->
-                <div>
-                    <label for="username" class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-user mr-2 text-indigo-600"></i>{{.T.Username}}
-                    </label>
-                    <input 
-                        type="text" 
-                        id="username" 
-                        name="username" 
-                        required
-                        minlength="3"
-                        maxlength="50"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none input-focus transition-all duration-300"
-                        placeholder="{{.T.UsernamePlaceholder}}"
-                    >
-                    <p class="text-xs text-gray-500 mt-1">{{.T.UsernameHint}}</p>
-                </div>
 
                 <!-- 邮箱输入 -->
                 <div>
@@ -89,21 +72,6 @@
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none input-focus transition-all duration-300"
                         placeholder="{{.T.EmailPlaceholder}}"
                     >
-                </div>
-
-                <!-- 手机号输入 -->
-                <div>
-                    <label for="phone" class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-phone mr-2 text-indigo-600"></i>{{.T.Phone}}
-                    </label>
-                    <input 
-                        type="tel" 
-                        id="phone" 
-                        name="phone" 
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none input-focus transition-all duration-300"
-                        placeholder="{{.T.PhonePlaceholder}}"
-                    >
-                    <p class="text-xs text-gray-500 mt-1">{{.T.ContactHint}}</p>
                 </div>
 
                 <!-- 密码输入 -->
@@ -177,7 +145,7 @@
                     type="submit" 
                     class="w-full btn-primary text-white py-3 px-4 rounded-lg font-medium focus:outline-none focus:ring-4 focus:ring-indigo-300"
                 >
-                    <i class="fas fa-user-plus mr-2"></i>{{.T.CreateAccount}}
+                    <i class="fas fa-user-plus mr-2"></i>{{.T.SignUpNow}}
                 </button>
             </form>
 
@@ -189,14 +157,16 @@
             </div>
 
             <!-- 第三方注册 -->
-            <div class="space-y-3">
-                <button class="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                    <i class="fab fa-google text-red-500 mr-3"></i>
-                    <span class="text-gray-700">{{.T.RegisterWithGoogle}}</span>
+            <div class="flex space-x-3">
+                <button disabled class="flex-1 flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed opacity-60">
+                    <i class="fab fa-google text-red-400 mr-2"></i>
+                    <span class="text-gray-600 text-sm">Google</span>
+                    <span class="text-gray-400 text-xs ml-1">(暂不支持)</span>
                 </button>
-                <button class="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                    <i class="fab fa-github text-gray-800 mr-3"></i>
-                    <span class="text-gray-700">{{.T.RegisterWithGitHub}}</span>
+                <button disabled class="flex-1 flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed opacity-60">
+                    <i class="fab fa-github text-gray-600 mr-2"></i>
+                    <span class="text-gray-600 text-sm">GitHub</span>
+                    <span class="text-gray-400 text-xs ml-1">(暂不支持)</span>
                 </button>
             </div>
 
@@ -237,11 +207,11 @@
                     body: JSON.stringify(formData)
                 });
                 
-                Utils.showNotification('注册成功！正在跳转到登录页面...', 'success');
+                const tips = '注册成功！正在跳转到登录页面...'
+                Utils.showNotification(data.message || tips, 'success');
                 setTimeout(() => {
                     window.location.href = '/signin';
                 }, 1200);
-                
             } catch (error) {
                 Utils.showNotification(error.message, 'error');
             } finally {
@@ -264,29 +234,29 @@
 
         // 更新密码强度显示
         function updatePasswordStrength(password) {
-            const { strength, feedback } = Utils.checkPasswordStrength(password);
+            const result = Utils.checkPasswordStrength(password);
             const strengthBar = document.getElementById('passwordStrength');
             const strengthText = document.getElementById('passwordStrengthText');
 
-            RegisterApp.passwordStrength = strength;
+            RegisterApp.passwordStrength = result.strength;
 
             // 更新强度条
-            const colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-blue-500', 'bg-green-500'];
-            const labels = ['很弱', '弱', '一般', '强', '很强'];
+            const colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-blue-500', 'bg-green-500', 'bg-green-600'];
             
-            strengthBar.className = `password-strength ${colors[strength - 1] || 'bg-gray-200'}`;
-            strengthBar.style.width = `${(strength / 5) * 100}%`;
+            strengthBar.className = `password-strength ${colors[result.strength] || 'bg-gray-200'}`;
+            strengthBar.style.width = `${(result.strength / 5) * 100}%`;
             
             if (password.length === 0) {
                 strengthText.textContent = '密码强度：请输入密码';
                 strengthText.className = 'text-xs text-gray-500 mt-1';
             } else {
-                strengthText.textContent = `密码强度：${labels[strength - 1] || '很弱'}`;
-                strengthText.className = `text-xs mt-1 ${
-                    strength <= 2 ? 'text-red-500' :
-                    strength <= 3 ? 'text-yellow-500' :
-                    'text-green-500'
-                }`;
+                strengthText.textContent = `密码强度：${result.text} - ${result.feedback}`;
+                const colorClass = result.color === 'red' ? 'text-red-500' :
+                                 result.color === 'orange' ? 'text-orange-500' :
+                                 result.color === 'yellow' ? 'text-yellow-500' :
+                                 result.color === 'blue' ? 'text-blue-500' :
+                                 'text-green-500';
+                strengthText.className = `text-xs mt-1 ${colorClass}`;
             }
         }
 
@@ -308,24 +278,16 @@
         // 事件监听器
         function setupEventListeners() {
             // 注册表单提交
-            document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            document.getElementById('signinForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
-                const username = document.getElementById('username').value.trim();
                 const email = document.getElementById('email').value.trim();
-                const phone = document.getElementById('phone').value.trim();
                 const password = document.getElementById('password').value;
                 const confirmPassword = document.getElementById('confirmPassword').value;
                 
                 // 验证必填字段
-                if (!username || !password) {
-                    Utils.showNotification('请填写用户名和密码', 'warning');
-                    return;
-                }
-                
-                // 验证邮箱或手机号
-                if (!email && !phone) {
-                    Utils.showNotification('请至少填写邮箱或手机号', 'warning');
+                if (!email || !password) {
+                    Utils.showNotification('请填写邮箱和密码', 'warning');
                     return;
                 }
                 
@@ -341,9 +303,7 @@
                     return;
                 }
                 
-                const formData = { username, password };
-                if (email) formData.email = email;
-                if (phone) formData.phone = phone;
+                const formData = { email, password };
                 
                 await handleRegister(formData);
             });
@@ -384,16 +344,6 @@
             // 确认密码验证
             document.getElementById('confirmPassword').addEventListener('input', validatePasswordMatch);
 
-            // 输入框焦点效果
-            document.querySelectorAll('input').forEach(input => {
-                input.addEventListener('focus', () => {
-                    input.parentElement.classList.add('ring-2', 'ring-indigo-500', 'ring-opacity-50');
-                });
-                
-                input.addEventListener('blur', () => {
-                    input.parentElement.classList.remove('ring-2', 'ring-indigo-500', 'ring-opacity-50');
-                });
-            });
         }
 
         // 检查是否已登录
@@ -412,8 +362,8 @@
             checkExistingSignup();
             setupEventListeners();
             
-            // 聚焦到用户名输入框
-            document.getElementById('username').focus();
+            // 聚焦到邮箱输入框
+            document.getElementById('email').focus();
         });
     </script>
 </body>

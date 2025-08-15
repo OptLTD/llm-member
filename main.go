@@ -32,8 +32,9 @@ func main() {
 	// 设置 Gin 模式
 	gin.SetMode(cfg.GinMode)
 	// 为 Gin 设置日志输出
-	gin.DefaultWriter = cfg.MultiWriter
-	gin.DefaultErrorWriter = cfg.MultiWriter
+	writer := config.GetLogger(cfg)
+	gin.DefaultWriter = writer
+	gin.DefaultErrorWriter = writer
 
 	r := gin.Default()
 
@@ -66,13 +67,16 @@ func main() {
 		rootApi := api.Group("/", auth.NoneMiddleware())
 		{
 			a := handle.NewAuthHandle(authService)
-			rootApi.POST("/verify", a.VerifyEmail)
 			rootApi.POST("/signin", a.UserSignIn)
 			rootApi.POST("/signup", a.UserSignUp)
 			rootApi.POST("/signout", a.UserSignOut)
 			rootApi.POST("/admin/signin", a.AdminSignIn)
 			rootApi.POST("/admin/signout", a.AdminSignOut)
-			rootApi.POST("/third/:provider", a.ThirdPartySignin) // 第三方登录
+			rootApi.POST("/third/:provider", a.ThirdSignin)
+			rootApi.POST("/reset-password", a.ResetPassword)
+			rootApi.POST("/forgot-password", a.ForgotPassword)
+			rootApi.POST("/verify-reset-code", a.VerifyResetCode)
+			rootApi.POST("/verify-signup-code", a.VerifySignUpCode)
 
 			s := handle.NewPublicHandler()
 			rootApi.POST("/pricing-plans", s.GetPricingPlans)

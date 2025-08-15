@@ -11,7 +11,6 @@ type UserModel struct {
 	ID uint64 `json:"id" gorm:"primarykey"`
 
 	Email    string `json:"email" gorm:"uniqueIndex;not null"`
-	Phone    string `json:"phone" gorm:"uniqueIndex"`
 	Username string `json:"username" gorm:"uniqueIndex;not null"`
 	Password string `json:"-" gorm:"not null"` // 不在 JSON 中返回密码
 	APIKey   string `json:"api_key" gorm:"uniqueIndex;not null"`
@@ -41,20 +40,19 @@ func (m UserModel) TableName() string {
 // CreateUserReq 创建用户请求
 type CreateUserReq struct {
 	Email    string `json:"email" binding:"required,email"`
-	Username string `json:"username" binding:"required,min=3,max=50"`
+	Username string `json:"username" binding:"omitempty"`
 	Password string `json:"password" binding:"required,min=6"`
 }
 
 // SignUpRequest 用户端注册请求
 type SignUpRequest struct {
 	Email    string `json:"email" binding:"omitempty,email"`
-	Phone    string `json:"phone" binding:"omitempty"`
-	Username string `json:"username" binding:"required,min=3,max=50"`
+	Username string `json:"username" binding:"omitempty"`
 	Password string `json:"password" binding:"required,min=6"`
 }
 
-// RegisterResponse 注册响应
-type RegisterResponse struct {
+// SignUpResponse 注册响应
+type SignUpResponse struct {
 	User    *UserModel `json:"user"`
 	APIKey  string     `json:"api_key"`
 	Message string     `json:"message"`

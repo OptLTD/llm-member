@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>密码重置 - {{.name}}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: Arial, sans-serif;">
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+        <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #333; margin: 0; font-size: 28px;">{{.name}}</h1>
+        </div>
+        
+        <h2 style="color: #333; text-align: center; margin-bottom: 30px;">密码重置</h2>
+        
+        <p style="color: #666; font-size: 16px; line-height: 1.6;">您好，</p>
+        
+        <p style="color: #666; font-size: 16px; line-height: 1.6;">我们收到了您重置密码的请求。请点击下面的按钮重置您的密码：</p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{.link}}" style="background-color: #dc3545; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-size: 16px; font-weight: bold; box-shadow: 0 2px 5px rgba(220,53,69,0.3);">重置密码</a>
+        </div>
+        
+        <p style="color: #666; font-size: 14px; line-height: 1.6;">如果按钮无法点击，请复制以下链接到浏览器地址栏：</p>
+        
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #007bff;">
+            <p style="color: #007bff; font-size: 14px; word-break: break-all; margin: 0; font-family: monospace;">{{.link}}</p>
+        </div>
+        
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee;">
+            <p style="color: #999; font-size: 12px; margin: 0; text-align: center;">如果您没有请求重置密码，请忽略此邮件。此链接将在24小时后失效。</p>
+            <p style="color: #999; font-size: 12px; margin: 10px 0 0 0; text-align: center;">此邮件由系统自动发送，请勿回复。</p>
+        </div>
+    </div>
+</body>
+</html>

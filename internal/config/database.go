@@ -40,6 +40,7 @@ func InitDB(path string) error {
 	// 自动迁移数据库表
 	err = db.AutoMigrate(
 		&model.UserModel{},
+		&model.VerifyModel{},
 		&model.OrderModel{},
 		&model.LlmLogModel{},
 		&model.ConfigModel{},

@@ -84,7 +84,7 @@ func (s *I18nService) GetTranslations(lang string) map[string]string {
 		"Back", "Submit", "Cancel", "Confirm", "Save", "Delete", "Edit", "Add", "Search", "Loading",
 		"Success", "Error", "Warning", "Info",
 		"SignInTitle", "SignInPageTitle", "Username", "Email", "Phone", "Password", "ConfirmPassword",
-		"RememberMe", "ForgotPassword", "SignInButton", "NoAccount", "RegisterNow", "SignInWith",
+		"RememberMe", "ForgotPassword", "SignInButton", "NoAccount", "SignUpNow", "SignInWith",
 		"GoogleLogin", "GitHubLogin", "SignUpTitle", "SignUpPageTitle", "SignUpButton", "AlreadyHaveAccount", "LoginNow",
 		"PasswordStrength", "WeakPassword", "MediumPassword", "StrongPassword", "AgreeTerms",
 		"TermsOfService", "And", "PrivacyPolicy",

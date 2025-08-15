@@ -84,15 +84,6 @@ func (s *UserService) UpdateUser(req *model.UpdateUserRequest) (*model.UserModel
 		user.Email = req.Email
 	}
 
-	if req.Phone != "" {
-		// 检查手机号是否已被其他用户使用
-		var existingUser model.UserModel
-		if err := s.db.Where("phone = ? AND id != ?", req.Phone, req.UserId).First(&existingUser).Error; err == nil {
-			return nil, fmt.Errorf("手机号已被使用")
-		}
-		user.Phone = req.Phone
-	}
-
 	if req.IsActive != nil {
 		user.IsActive = *req.IsActive
 	}
@@ -177,7 +168,7 @@ func (s *UserService) CheckUserLimits(userID uint64) error {
 }
 
 // DeleteUser 删除用户（软删除）
-func (s *UserService) DeleteUser(userID uint) error {
+func (s *UserService) DeleteUser(userID uint64) error {
 	return s.db.Delete(&model.UserModel{}, userID).Error
 }
 

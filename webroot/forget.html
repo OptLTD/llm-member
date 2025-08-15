@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>忘记密码 - {{.AppName}}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .floating-animation {
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        .input-focus {
+            transition: all 0.3s ease;
+        }
+        .input-focus:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .btn-primary:disabled {
+            background: #9CA3AF !important;
+            cursor: not-allowed !important;
+            opacity: 0.6 !important;
+            transform: none !important;
+        }
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen flex items-center justify-center p-4">
+    <!-- 背景装饰 -->
+    <div class="absolute inset-0 overflow-hidden">
+        <div class="absolute -top-40 -right-40 w-80 h-80 bg-white opacity-10 rounded-full floating-animation"></div>
+        <div class="absolute -bottom-40 -left-40 w-96 h-96 bg-white opacity-5 rounded-full floating-animation" style="animation-delay: -3s;"></div>
+        <div class="absolute top-1/2 left-1/4 w-32 h-32 bg-white opacity-10 rounded-full floating-animation" style="animation-delay: -1s;"></div>
+    </div>
+
+    <!-- 忘记密码容器 -->
+    <div class="relative z-10 w-full max-w-md">
+        <!-- 标题 -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-white">忘记密码</h1>
+            <p class="text-indigo-200 mt-2">输入您的邮箱地址，我们将发送重置链接</p>
+        </div>
+
+        <!-- 忘记密码表单 -->
+        <div class="glass-effect rounded-2xl shadow-2xl p-8 backdrop-blur-md bg-white/10 border border-white/20">
+            <!-- 输入邮箱状态 -->
+            <div id="emailForm">
+                <form id="forgetPasswordForm" class="space-y-6">
+                    <!-- 邮箱输入 -->
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-white mb-2">
+                            <i class="fas fa-envelope mr-2 text-indigo-300"></i>邮箱地址
+                        </label>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            name="email" 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none input-focus transition-all duration-300"
+                            placeholder="请输入您的邮箱地址"
+                            required
+                        >
+                        <div id="emailError" class="mt-2 text-sm text-red-300 hidden">
+                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                            <span id="emailErrorText">请输入有效的邮箱地址</span>
+                        </div>
+                    </div>
+
+                    <!-- 发送按钮 -->
+                    <button 
+                        type="submit" 
+                        id="sendBtn"
+                        class="w-full btn-primary text-white py-3 px-4 rounded-lg font-medium focus:outline-none focus:ring-4 focus:ring-indigo-300"
+                    >
+                        <i class="fas fa-paper-plane mr-2"></i>发送重置链接
+                    </button>
+                </form>
+            </div>
+
+            <!-- 发送成功状态 -->
+            <div id="successState" class="text-center hidden fade-in">
+                <div class="mb-6">
+                    <i class="fas fa-check-circle text-6xl text-green-400 mb-4"></i>
+                    <h2 class="text-2xl font-bold text-white mb-2">邮件已发送！</h2>
+                    <p class="text-indigo-200 mb-4">我们已向 <span id="sentEmail" class="font-semibold text-white"></span> 发送了密码重置链接</p>
+                    <p class="text-sm text-indigo-300 mb-6">请检查您的邮箱（包括垃圾邮件文件夹），并点击链接重置密码</p>
+                    
+                    <!-- 重新发送倒计时 -->
+                    <div id="resendSection" class="mb-6">
+                        <p class="text-sm text-indigo-200 mb-3">
+                            没有收到邮件？ 
+                            <span id="resendTimer" class="font-semibold">60秒后可重新发送</span>
+                        </p>
+                        <button 
+                            id="resendBtn" 
+                            class="w-full bg-indigo-500 text-white py-2 px-4 rounded-lg font-medium hover:bg-indigo-600 transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed"
+                            disabled
+                        >
+                            <i class="fas fa-redo mr-2"></i>重新发送
+                        </button>
+                    </div>
+                    
+                    <button onclick="window.location.href='/signin'" 
+                            class="w-full bg-gray-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-gray-700 transition-colors">
+                        <i class="fas fa-arrow-left mr-2"></i>返回登录
+                    </button>
+                </div>
+            </div>
+
+            <!-- 错误状态 -->
+            <div id="errorState" class="text-center hidden fade-in">
+                <div class="mb-6">
+                    <i class="fas fa-times-circle text-6xl text-red-400 mb-4"></i>
+                    <h2 class="text-2xl font-bold text-white mb-2">发送失败</h2>
+                    <p id="errorMessage" class="text-indigo-200 mb-6">邮件发送失败，请稍后重试</p>
+                    
+                    <div class="space-y-3">
+                        <button onclick="showEmailForm()" 
+                                class="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-indigo-700 transition-colors">
+                            <i class="fas fa-redo mr-2"></i>重新尝试
+                        </button>
+                        <button onclick="window.location.href='/signin'" 
+                                class="w-full bg-gray-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-gray-700 transition-colors">
+                            <i class="fas fa-arrow-left mr-2"></i>返回登录
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部导航 -->
+        <div class="text-center mt-6">
+            <div class="flex justify-center space-x-6">
+                <a href="/signin" class="text-white hover:text-indigo-200 transition-colors">
+                    <i class="fas fa-sign-in-alt mr-2"></i>登录
+                </a>
+                <a href="/signup" class="text-white hover:text-indigo-200 transition-colors">
+                    <i class="fas fa-user-plus mr-2"></i>注册
+                </a>
+                <a href="/" class="text-white hover:text-indigo-200 transition-colors">
+                    <i class="fas fa-home mr-2"></i>首页
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知容器 -->
+    <div id="notification-container" class="fixed top-4 right-4 z-50"></div>
+    
+    <script src="utils.js"></script>
+    <script>
+        // 忘记密码应用状态
+        const ForgetApp = {
+            isLoading: false,
+            resendTimer: null,
+            resendCountdown: 60,
+            userEmail: ''
+        };
+
+        // 显示不同状态
+        function showState(stateName) {
+            const states = ['emailForm', 'successState', 'errorState'];
+            states.forEach(state => {
+                document.getElementById(state).classList.add('hidden');
+            });
+            document.getElementById(stateName).classList.remove('hidden');
+        }
+
+        // 显示邮箱表单
+        function showEmailForm() {
+            showState('emailForm');
+            document.getElementById('email').focus();
+        }
+
+        // 验证邮箱格式
+        function validateEmail(email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return emailRegex.test(email);
+        }
+
+        // 显示邮箱错误
+        function showEmailError(message) {
+            const errorDiv = document.getElementById('emailError');
+            const errorText = document.getElementById('emailErrorText');
+            errorText.textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+
+        // 隐藏邮箱错误
+        function hideEmailError() {
+            document.getElementById('emailError').classList.add('hidden');
+        }
+
+        // 开始重发倒计时
+        function startResendTimer() {
+            const timerSpan = document.getElementById('resendTimer');
+            const resendBtn = document.getElementById('resendBtn');
+            
+            ForgetApp.resendCountdown = 60;
+            resendBtn.disabled = true;
+            
+            ForgetApp.resendTimer = setInterval(() => {
+                ForgetApp.resendCountdown--;
+                
+                if (ForgetApp.resendCountdown > 0) {
+                    timerSpan.textContent = `${ForgetApp.resendCountdown}秒后可重新发送`;
+                } else {
+                    timerSpan.textContent = '现在可以重新发送';
+                    resendBtn.disabled = false;
+                    clearInterval(ForgetApp.resendTimer);
+                }
+            }, 1000);
+        }
+
+        // 发送重置邮件
+        async function sendResetEmail(email) {
+            try {
+                ForgetApp.isLoading = true;
+                const sendBtn = document.getElementById('sendBtn');
+                sendBtn.disabled = true;
+                sendBtn.innerHTML = '<i class="fas fa-spinner loading-spinner mr-2"></i>发送中...';
+
+                const response = await Utils.apiRequest('/api/forgot-password', {
+                    method: 'POST',
+                    body: JSON.stringify({ email: email })
+                });
+
+                // 发送成功
+                ForgetApp.userEmail = email;
+                document.getElementById('sentEmail').textContent = email;
+                showState('successState');
+                startResendTimer();
+                Utils.showNotification('重置邮件发送成功！', 'success');
+                
+            } catch (error) {
+                console.error('发送重置邮件失败:', error);
+                showState('errorState');
+                document.getElementById('errorMessage').textContent = error.message || '邮件发送失败，请稍后重试';
+                Utils.showNotification(error.message || '发送失败，请重试', 'error');
+                
+            } finally {
+                ForgetApp.isLoading = false;
+                const sendBtn = document.getElementById('sendBtn');
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>发送重置链接';
+            }
+        }
+
+        // 重新发送邮件
+        async function resendEmail() {
+            if (ForgetApp.userEmail) {
+                await sendResetEmail(ForgetApp.userEmail);
+            }
+        }
+
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 忘记密码表单提交
+            document.getElementById('forgetPasswordForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const email = document.getElementById('email').value.trim();
+                
+                // 验证邮箱
+                if (!email) {
+                    showEmailError('请输入邮箱地址');
+                    return;
+                }
+                
+                if (!validateEmail(email)) {
+                    showEmailError('请输入有效的邮箱地址');
+                    return;
+                }
+                
+                hideEmailError();
+                await sendResetEmail(email);
+            });
+
+            // 邮箱输入变化时隐藏错误
+            document.getElementById('email').addEventListener('input', () => {
+                hideEmailError();
+            });
+
+            // 重新发送按钮
+            document.getElementById('resendBtn').addEventListener('click', resendEmail);
+        }
+
+        // 页面初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            // 设置事件监听器
+            setupEventListeners();
+            
+            // 聚焦邮箱输入框
+            document.getElementById('email').focus();
+        });
+
+        // 页面卸载时清理定时器
+        window.addEventListener('beforeunload', () => {
+            if (ForgetApp.resendTimer) {
+                clearInterval(ForgetApp.resendTimer);
+            }
+        });
+    </script>
+</body>
+</html>

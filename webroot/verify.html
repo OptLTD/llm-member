@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>邮箱验证 - {{.AppName}}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .floating-animation {
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        .verification-card {
+            transition: all 0.3s ease;
+        }
+        .verification-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .success-animation {
+            animation: bounce 0.6s ease-in-out;
+        }
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
+            60% { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen flex items-center justify-center p-4">
+    <!-- 背景装饰 -->
+    <div class="absolute inset-0 overflow-hidden">
+        <div class="absolute -top-40 -right-40 w-80 h-80 bg-white opacity-10 rounded-full floating-animation"></div>
+        <div class="absolute -bottom-40 -left-40 w-96 h-96 bg-white opacity-5 rounded-full floating-animation" style="animation-delay: -3s;"></div>
+        <div class="absolute top-1/2 left-1/4 w-32 h-32 bg-white opacity-10 rounded-full floating-animation" style="animation-delay: -1s;"></div>
+    </div>
+
+    <!-- 验证容器 -->
+    <div class="relative z-10 w-full max-w-md">
+        <!-- 验证卡片 -->
+        <div class="glass-effect rounded-2xl shadow-2xl p-8 verification-card">
+            <!-- 加载状态 -->
+            <div id="loadingState" class="text-center">
+                <div class="mb-6">
+                    <i class="fas fa-spinner loading-spinner text-4xl text-indigo-600 mb-4"></i>
+                    <h1 class="text-2xl font-bold text-gray-800 mb-2">正在验证邮箱</h1>
+                    <p class="text-gray-600">请稍候，我们正在验证您的邮箱地址...</p>
+                </div>
+            </div>
+
+            <!-- 验证成功状态 -->
+            <div id="successState" class="text-center hidden">
+                <div class="mb-6">
+                    <i class="fas fa-check-circle text-6xl text-green-500 mb-4 success-animation"></i>
+                    <h1 class="text-2xl font-bold text-gray-800 mb-2">验证成功！</h1>
+                    <p class="text-gray-600 mb-6">您的邮箱已成功验证，现在可以正常使用所有功能了。</p>
+                    
+                    <div class="space-y-3">
+                        <button onclick="window.location.href='/profile'" 
+                                class="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-indigo-700 transition-colors">
+                            <i class="fas fa-user mr-2"></i>前往个人中心
+                        </button>
+                        <button onclick="window.location.href='/'" 
+                                class="w-full bg-gray-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-gray-600 transition-colors">
+                            <i class="fas fa-home mr-2"></i>返回首页
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 验证失败状态 -->
+            <div id="errorState" class="text-center hidden">
+                <div class="mb-6">
+                    <i class="fas fa-times-circle text-6xl text-red-500 mb-4"></i>
+                    <h1 class="text-2xl font-bold text-gray-800 mb-2">验证失败</h1>
+                    <p id="errorMessage" class="text-gray-600 mb-6">验证链接无效或已过期，请重新获取验证邮件。</p>
+                    
+                    <div class="space-y-3">
+                        <button id="resendBtn" 
+                                class="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-indigo-700 transition-colors">
+                            <i class="fas fa-envelope mr-2"></i>重新发送验证邮件
+                        </button>
+                        <button onclick="window.location.href='/signin'" 
+                                class="w-full bg-gray-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-gray-600 transition-colors">
+                            <i class="fas fa-sign-in-alt mr-2"></i>返回登录
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 已验证状态 -->
+            <div id="alreadyVerifiedState" class="text-center hidden">
+                <div class="mb-6">
+                    <i class="fas fa-info-circle text-6xl text-blue-500 mb-4"></i>
+                    <h1 class="text-2xl font-bold text-gray-800 mb-2">邮箱已验证</h1>
+                    <p class="text-gray-600 mb-6">您的邮箱已经通过验证，无需重复验证。</p>
+                    
+                    <div class="space-y-3">
+                        <button onclick="window.location.href='/profile'" 
+                                class="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-indigo-700 transition-colors">
+                            <i class="fas fa-user mr-2"></i>前往个人中心
+                        </button>
+                        <button onclick="window.location.href='/'" 
+                                class="w-full bg-gray-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-gray-600 transition-colors">
+                            <i class="fas fa-home mr-2"></i>返回首页
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部链接 -->
+        <div class="text-center mt-6">
+            <p class="text-white text-sm">
+                遇到问题？
+                <a href="mailto:support@example.com" class="text-indigo-200 hover:text-white transition-colors">
+                    联系客服
+                </a>
+            </p>
+        </div>
+    </div>
+
+    <!-- 通知容器 -->
+    <div id="notification-container" class="fixed top-4 right-4 z-50"></div>
+    
+    <script src="utils.js"></script>
+    <script>
+        // 验证应用状态
+        const VerifyApp = {
+            isLoading: false,
+            verificationCode: null
+        };
+
+        // 获取URL参数中的验证码
+        function getVerificationCode() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('code');
+        }
+
+        // 显示不同状态
+        function showState(stateName) {
+            const states = ['loadingState', 'successState', 'errorState', 'alreadyVerifiedState'];
+            states.forEach(state => {
+                document.getElementById(state).classList.add('hidden');
+            });
+            document.getElementById(stateName).classList.remove('hidden');
+        }
+
+        // 执行邮箱验证
+        async function verifyEmail(code) {
+            try {
+                VerifyApp.isLoading = true;
+                showState('loadingState');
+
+                const url = '/api/verify-signup-code'
+                const resp = await Utils.apiRequest(url, {
+                    body: JSON.stringify({ code: code })
+                });
+                // 验证成功
+                showState('successState');
+                Utils.showNotification('邮箱验证成功！', 'success');
+                
+            } catch (error) {
+                console.error('验证失败:', error);
+                
+                // 根据错误类型显示不同状态
+                if (error.message.includes('已验证') || error.message.includes('already verified')) {
+                    showState('alreadyVerifiedState');
+                } else {
+                    showState('errorState');
+                    document.getElementById('errorMessage').textContent = error.message || '验证失败，请重试';
+                }
+                
+            } finally {
+                VerifyApp.isLoading = false;
+            }
+        }
+
+        // 重新发送验证邮件
+        async function resendVerificationEmail() {
+            try {
+                const email = localStorage.getItem('pendingVerificationEmail');
+                if (!email) {
+                    Utils.showNotification('无法获取邮箱信息，请重新注册', 'error');
+                    return;
+                }
+
+                await Utils.apiRequest('/api/resend-verification', {
+                    method: 'POST',
+                    body: JSON.stringify({ email: email })
+                });
+
+                Utils.showNotification('验证邮件已重新发送，请检查您的邮箱', 'success');
+                
+            } catch (error) {
+                Utils.showNotification(error.message || '发送失败，请稍后重试', 'error');
+            }
+        }
+
+        // 页面初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            const code = getVerificationCode();
+            
+            if (!code) {
+                showState('errorState');
+                document.getElementById('errorMessage').textContent = '缺少验证码参数';
+                return;
+            }
+
+            VerifyApp.verificationCode = code;
+            
+            // 自动开始验证
+            setTimeout(() => {
+                verifyEmail(code);
+            }, 1000);
+
+            // 绑定重新发送按钮事件
+            document.getElementById('resendBtn').addEventListener('click', resendVerificationEmail);
+        });
+    </script>
+</body>
+</html>

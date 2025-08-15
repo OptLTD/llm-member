@@ -3,7 +3,6 @@ package handle
 import (
 	"llm-member/internal/model"
 	"llm-member/internal/service"
-	"llm-member/internal/support"
 	"log"
 	"net/http"
 	"strings"
@@ -12,16 +11,16 @@ import (
 )
 
 type AuthHandle struct {
-	authService  *service.AuthService
-	userService  *service.UserService
-	emailService *service.EmailService
+	authService *service.AuthService
+	userService *service.UserService
+	mailService *service.MailService
 }
 
 func NewAuthHandle(authService *service.AuthService) *AuthHandle {
 	return &AuthHandle{
-		authService:  authService,
-		userService:  service.NewUserService(),
-		emailService: service.NewEmailService(),
+		authService: authService,
+		userService: service.NewUserService(),
+		mailService: service.NewMailService(),
 	}
 }
 
@@ -33,73 +32,58 @@ func (h *AuthHandle) UserSignUp(c *gin.Context) {
 		return
 	}
 
-	// 验证至少提供邮箱或手机号之一
-	if req.Email == "" && req.Phone == "" {
-		c.JSON(400, gin.H{"error": "请提供邮箱或手机号"})
+	if req.Email == "" {
+		c.JSON(400, gin.H{"error": "请提供邮箱"})
 		return
 	}
 
-	// 检查是否支持手机号注册
-	if support.IsPhoneNumber(req.Username) {
-		// 这里可以添加手机号验证逻辑
-		req.Email = req.Username + "@temp.phone" // 临时邮箱格式
-	}
-
 	// 转换为标准注册请求
-	registerReq := &model.SignUpRequest{
+	signup := &model.SignUpRequest{
 		Email:    req.Email,
-		Username: req.Username,
+		Username: req.Email,
 		Password: req.Password,
 	}
 
-	// 如果没有邮箱但有手机号，使用手机号作为邮箱（临时方案）
-	if registerReq.Email == "" && req.Phone != "" {
-		registerReq.Email = req.Phone + "@phone.local"
-	}
-
 	// 注册用户
-	user, err := h.authService.SignUp(registerReq)
+	user, err := h.authService.SignUp(signup)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	// 生成注册 token
-	reset, err := h.authService.GenerateSignupToken(user.Email)
+	token, err := h.authService.GenerateSignupToken(signup.Email)
 	if err != nil {
+		h.authService.DeleteSignup(user)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "生成注册 token 失败",
 		})
 		return
 	}
+
 	// 发送验证邮件
-	if err := h.emailService.SendSignupCodeEmail(reset); err != nil {
-		// 在生产环境中，您可能希望处理此错误，例如，将任务排队重试
-		// 就目前而言，我们只记录它
+	if err := h.mailService.SendSignupCodeEmail(token); err != nil {
+		// 在生产环境中，您可能希望处理此错误，例如，将任务排队重试,就目前而言，我们只记录它
 		log.Printf("发送验证邮件失败: %v", err)
 	}
 
-	// 如果提供了手机号，更新用户的手机号字段
-	if req.Phone != "" {
-		h.userService.UpdateUser(&model.UpdateUserRequest{
-			UserId: user.ID, Phone: req.Phone,
-		})
-	}
-
-	c.JSON(http.StatusCreated, model.RegisterResponse{
+	c.JSON(http.StatusCreated, model.SignUpResponse{
 		User: user, APIKey: user.APIKey,
 		Message: "注册成功，请检查您的邮箱以获取验证链接。",
 	})
 }
 
-// VerifyEmail handles email verification.
-func (h *AuthHandle) VerifyEmail(c *gin.Context) {
-	if code := c.Query("code"); code == "" {
+// VerifySignUpCode handles email verification.
+func (h *AuthHandle) VerifySignUpCode(c *gin.Context) {
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Code == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "验证码不能为空"})
 		return
 	}
 
-	err := h.authService.VerifyEmail(c.Query("code"))
+	err := h.authService.VerifyEmail(req.Code)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -145,7 +129,7 @@ func (h *AuthHandle) UserSignIn(c *gin.Context) {
 	token, _, err := h.authService.SignIn(user.Username, req.Password)
 	if err != nil {
 		log.Println("SignIn failed:", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成token失败"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -198,8 +182,74 @@ func (h *AuthHandle) AdminSignOut(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "登出成功"})
 }
 
-// ThirdPartySignin 第三方登录（用户端）
-func (h *AuthHandle) ThirdPartySignin(c *gin.Context) {
+// ForgotPassword 忘记密码
+func (h *AuthHandle) ForgotPassword(c *gin.Context) {
+	var req struct {
+		Email string `json:"email" binding:"required,email"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请提供有效的邮箱地址"})
+		return
+	}
+
+	// 生成重置token
+	token, err := h.authService.ForgotPassword(req.Email)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 发送重置邮件
+	if err := h.mailService.SendResetCodeEmail(token); err != nil {
+		log.Printf("发送重置邮件失败: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "邮件发送失败，请稍后重试"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "重置邮件已发送，请检查您的邮箱"})
+}
+
+// VerifyResetCode 验证重置码
+func (h *AuthHandle) VerifyResetCode(c *gin.Context) {
+	var req struct {
+		Code string `json:"code" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "重置码不能为空"})
+		return
+	}
+
+	_, err := h.authService.VerifyResetCode(req.Code)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "重置码验证成功"})
+}
+
+// ResetPassword 重置密码
+func (h *AuthHandle) ResetPassword(c *gin.Context) {
+	var req struct {
+		Code     string `json:"code" binding:"required"`
+		Password string `json:"password" binding:"required,min=6"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请提供有效的重置码和密码"})
+		return
+	}
+
+	err := h.authService.ResetPassword(req.Code, req.Password)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "密码重置成功"})
+}
+
+// ThirdSignin 第三方登录（用户端）
+func (h *AuthHandle) ThirdSignin(c *gin.Context) {
 	provider := c.Param("provider") // google, github, etc.
 	code := c.Query("code")
 

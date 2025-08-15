@@ -63,16 +63,16 @@ func (m OrderModel) TableName() string {
 	return "llm_order"
 }
 
-type TokenModel struct {
+type VerifyModel struct {
 	ID uint64 `json:"id" gorm:"primarykey"`
 
 	Email string `json:"email" gorm:"index"`
-	Token string `json:"token" gorm:"type:varchar(36)"`
+	Token string `json:"token" gorm:"type:varchar(64)"`
 
 	ExpiredAt time.Time `json:"expired_at"`
 	gorm.Model
 }
 
-func (m TokenModel) TableName() string {
-	return "llm_token"
+func (m VerifyModel) TableName() string {
+	return "llm_verify"
 }

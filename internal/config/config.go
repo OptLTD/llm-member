@@ -11,11 +11,10 @@ type Config struct {
 	AppPort string
 	AppName string
 	AppDesc string
+	AppHost string
 	GinMode string
 	DBPath  string
 	LogFile string
-
-	MultiWriter io.Writer // 用于Gin日志输出
 }
 
 // Provider 提供商配置
@@ -42,16 +41,30 @@ type PaymentProvider struct {
 	NotifyURL  string // 回调地址
 }
 
+// MailConfig 邮件配置
+type MailConfig struct {
+	FromName string // 发件人名称
+	HostAddr string // SMTP服务器地址
+	FromAddr string // 发件人邮箱
+	Password string // 邮箱密码或授权码
+	UserName string // 用户名
+}
+
 func Load() *Config {
 	cfg := &Config{
+		GinMode: getEnv("GIN_MODE", "test"),
 		AppPort: getEnv("APP_PORT", "8080"),
 		AppName: getEnv("APP_NAME", "Demo"),
 		AppDesc: getEnv("APP_DESC", "Desc"),
-		GinMode: getEnv("GIN_MODE", "debug"),
+		AppHost: getEnv("APP_HOST", "localhost"),
 		DBPath:  getEnv("DB_PATH", "storage/app.db"),
 		LogFile: getEnv("LOG_FILE", "storage/app.log"),
 	}
+	return cfg
+}
 
+// GetLogger 配置日志系统
+func GetLogger(cfg *Config) io.Writer {
 	// 创建必要的目录（基于日志文件和数据库文件路径）
 	logDir := filepath.Dir(cfg.LogFile)
 	if logDir != "." && logDir != "" {
@@ -72,9 +85,7 @@ func Load() *Config {
 	log.SetOutput(multiWriter)
 
 	// 将multiWriter保存到配置中，供Gin使用
-	cfg.MultiWriter = multiWriter
-
-	return cfg
+	return multiWriter
 }
 
 // GetProviders 返回已配置的提供商列表
@@ -264,6 +275,17 @@ func GetPaymentProvider(name string) *PaymentProvider {
 func HasPaymentProvider(name string) bool {
 	provider := GetPaymentProvider(name)
 	return provider != nil && provider.Enabled
+}
+
+// GetMailConfig 获取邮件配置
+func GetMailConfig() *MailConfig {
+	return &MailConfig{
+		FromName: getEnv("MAIL_FROM_NAME", ""),
+		HostAddr: getEnv("MAIL_HOST_ADDR", ""),
+		FromAddr: getEnv("MAIL_FROM_ADDR", ""),
+		Password: getEnv("MAIL_PASS_WORD", ""),
+		UserName: getEnv("MAIL_USER_NAME", ""),
+	}
 }
 
 func getEnv(key, defaultValue string) string {

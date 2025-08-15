@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>重置密码 - {{.AppName}}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .floating-animation {
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        .input-focus {
+            transition: all 0.3s ease;
+        }
+        .input-focus:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .btn-primary:disabled {
+            background: #9CA3AF !important;
+            cursor: not-allowed !important;
+            opacity: 0.6 !important;
+            transform: none !important;
+        }
+        .password-strength {
+            height: 4px;
+            border-radius: 2px;
+            transition: all 0.3s ease;
+        }
+        .strength-weak { background-color: #ef4444; }
+        .strength-fair { background-color: #f59e0b; }
+        .strength-good { background-color: #10b981; }
+        .strength-strong { background-color: #059669; }
+        .strength-very-strong { background-color: #047857; }
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen flex items-center justify-center p-4">
+    <!-- 背景装饰 -->
+    <div class="absolute inset-0 overflow-hidden">
+        <div class="absolute -top-40 -right-40 w-80 h-80 bg-white opacity-10 rounded-full floating-animation"></div>
+        <div class="absolute -bottom-40 -left-40 w-96 h-96 bg-white opacity-5 rounded-full floating-animation" style="animation-delay: -3s;"></div>
+        <div class="absolute top-1/2 left-1/4 w-32 h-32 bg-white opacity-10 rounded-full floating-animation" style="animation-delay: -1s;"></div>
+    </div>
+
+    <!-- 重置密码容器 -->
+    <div class="relative z-10 w-full max-w-md">
+        <!-- 标题 -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-white">重置密码</h1>
+            <p class="text-indigo-200 mt-2">请设置您的新密码</p>
+        </div>
+
+        <!-- 重置密码表单 -->
+        <div class="glass-effect rounded-2xl shadow-2xl p-8">
+            <!-- 验证码验证状态 -->
+            <div id="verifyingState" class="text-center">
+                <div class="mb-6">
+                    <i class="fas fa-spinner loading-spinner text-4xl text-indigo-600 mb-4"></i>
+                    <h2 class="text-xl font-semibold text-gray-800 mb-2">验证重置链接</h2>
+                    <p class="text-gray-600">正在验证您的重置链接...</p>
+                </div>
+            </div>
+
+            <!-- 重置密码表单 -->
+            <div id="resetForm" class="hidden">
+                <form id="passwordResetForm" class="space-y-6">
+                    <!-- 新密码输入 -->
+                    <div>
+                        <label for="newPassword" class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-lock mr-2 text-indigo-600"></i>新密码
+                        </label>
+                        <div class="relative">
+                            <input 
+                                type="password" 
+                                id="newPassword" 
+                                name="newPassword" 
+                                class="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none input-focus transition-all duration-300"
+                                placeholder="请输入新密码"
+                                required
+                            >
+                            <button type="button" id="toggleNewPassword" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- 密码强度指示器 -->
+                        <div class="mt-2">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-xs text-gray-600">密码强度</span>
+                                <span id="strengthText" class="text-xs text-gray-600">请输入密码</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-1">
+                                <div id="strengthBar" class="password-strength h-1 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 确认密码输入 -->
+                    <div>
+                        <label for="confirmPassword" class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-lock mr-2 text-indigo-600"></i>确认新密码
+                        </label>
+                        <div class="relative">
+                            <input 
+                                type="password" 
+                                id="confirmPassword" 
+                                name="confirmPassword" 
+                                class="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none input-focus transition-all duration-300"
+                                placeholder="请再次输入新密码"
+                                required
+                            >
+                            <button type="button" id="toggleConfirmPassword" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- 密码匹配提示 -->
+                        <div id="passwordMismatch" class="mt-2 text-sm text-red-600 hidden">
+                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                            两次输入的密码不一致
+                        </div>
+                    </div>
+
+                    <!-- 重置按钮 -->
+                    <button 
+                        type="submit" 
+                        id="resetBtn"
+                        class="w-full btn-primary text-white py-3 px-4 rounded-lg font-medium focus:outline-none focus:ring-4 focus:ring-indigo-300"
+                        disabled
+                    >
+                        <i class="fas fa-key mr-2"></i>重置密码
+                    </button>
+                </form>
+            </div>
+
+            <!-- 重置成功状态 -->
+            <div id="successState" class="text-center hidden">
+                <div class="mb-6">
+                    <i class="fas fa-check-circle text-6xl text-green-500 mb-4"></i>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">密码重置成功！</h2>
+                    <p class="text-gray-600 mb-6">您的密码已成功重置，现在可以使用新密码登录了。</p>
+                    
+                    <button onclick="window.location.href='/signin'" 
+                            class="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-indigo-700 transition-colors">
+                        <i class="fas fa-sign-in-alt mr-2"></i>立即登录
+                    </button>
+                </div>
+            </div>
+
+            <!-- 错误状态 -->
+            <div id="errorState" class="text-center hidden">
+                <div class="mb-6">
+                    <i class="fas fa-times-circle text-6xl text-red-500 mb-4"></i>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">重置失败</h2>
+                    <p id="errorMessage" class="text-gray-600 mb-6">重置链接无效或已过期，请重新申请密码重置。</p>
+                    
+                    <div class="space-y-3">
+                        <button onclick="window.location.href='/forgot-password'" 
+                                class="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-indigo-700 transition-colors">
+                            <i class="fas fa-envelope mr-2"></i>重新申请重置
+                        </button>
+                        <button onclick="window.location.href='/signin'" 
+                                class="w-full bg-gray-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-gray-600 transition-colors">
+                            <i class="fas fa-sign-in-alt mr-2"></i>返回登录
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 返回登录 -->
+        <div class="text-center mt-6">
+            <a href="/signin" class="text-white hover:text-indigo-200 transition-colors">
+                <i class="fas fa-arrow-left mr-2"></i>返回登录
+            </a>
+        </div>
+    </div>
+
+    <!-- 通知容器 -->
+    <div id="notification-container" class="fixed top-4 right-4 z-50"></div>
+    
+    <script src="utils.js"></script>
+    <script>
+        // 重置密码应用状态
+        const ResetApp = {
+            isLoading: false,
+            passwordStrength: 0,
+            resetCode: null
+        };
+
+        // 获取URL参数中的重置码
+        function getResetCode() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('code');
+        }
+
+        // 显示不同状态
+        function showState(stateName) {
+            const states = ['verifyingState', 'resetForm', 'successState', 'errorState'];
+            states.forEach(state => {
+                document.getElementById(state).classList.add('hidden');
+            });
+            document.getElementById(stateName).classList.remove('hidden');
+        }
+
+        // 验证重置码
+        async function verifyResetCode(code) {
+            try {
+                const url = '/api/verify-reset-code'
+                const response = await Utils.apiRequest(url, {
+                    body: JSON.stringify({ code: code })
+                });
+
+                // 验证成功，显示重置表单
+                showState('resetForm');
+                
+            } catch (error) {
+                console.error('验证重置码失败:', error);
+                showState('errorState');
+                document.getElementById('errorMessage').textContent = error.message || '重置链接无效或已过期';
+            }
+        }
+
+        // 更新密码强度
+        function updatePasswordStrength(password) {
+            if (!password) {
+                document.getElementById('strengthBar').style.width = '0%';
+                document.getElementById('strengthText').textContent = '请输入密码';
+                ResetApp.passwordStrength = 0;
+                return;
+            }
+
+            const result = Utils.checkPasswordStrength(password);
+            const strengthBar = document.getElementById('strengthBar');
+            const strengthText = document.getElementById('strengthText');
+            
+            // 更新进度条
+            const width = (result.strength / 5) * 100;
+            strengthBar.style.width = width + '%';
+            
+            // 更新颜色和文本
+            const colorClasses = {
+                'red': 'bg-red-500',
+                'orange': 'bg-orange-500', 
+                'yellow': 'bg-yellow-500',
+                'blue': 'bg-blue-500',
+                'green': 'bg-green-500'
+            };
+            const colorClass = colorClasses[result.color] || 'bg-gray-200';
+            strengthBar.className = `password-strength h-1 rounded-full ${colorClass}`;
+            strengthText.textContent = result.text;
+            
+            ResetApp.passwordStrength = result.strength;
+            updateResetButton();
+        }
+
+        // 验证密码匹配
+        function validatePasswordMatch() {
+            const password = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const mismatchMsg = document.getElementById('passwordMismatch');
+            
+            if (confirmPassword && password !== confirmPassword) {
+                mismatchMsg.classList.remove('hidden');
+                return false;
+            } else {
+                mismatchMsg.classList.add('hidden');
+                return true;
+            }
+        }
+
+        // 更新重置按钮状态
+        function updateResetButton() {
+            const password = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const resetBtn = document.getElementById('resetBtn');
+            
+            const isValid = password && 
+                           confirmPassword && 
+                           password === confirmPassword && 
+                           ResetApp.passwordStrength >= 2;
+            
+            resetBtn.disabled = !isValid;
+        }
+
+        // 处理密码重置
+        async function handlePasswordReset(formData) {
+            try {
+                ResetApp.isLoading = true;
+                const resetBtn = document.getElementById('resetBtn');
+                resetBtn.disabled = true;
+                resetBtn.innerHTML = '<i class="fas fa-spinner loading-spinner mr-2"></i>重置中...';
+
+                await Utils.apiRequest('/api/reset-password', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        code: ResetApp.resetCode,
+                        password: formData.newPassword
+                    })
+                });
+
+                // 重置成功
+                showState('successState');
+                Utils.showNotification('密码重置成功！', 'success');
+                
+            } catch (error) {
+                Utils.showNotification(error.message || '重置失败，请重试', 'error');
+                
+                // 恢复按钮状态
+                const resetBtn = document.getElementById('resetBtn');
+                resetBtn.disabled = false;
+                resetBtn.innerHTML = '<i class="fas fa-key mr-2"></i>重置密码';
+                
+            } finally {
+                ResetApp.isLoading = false;
+            }
+        }
+
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 密码重置表单提交
+            document.getElementById('passwordResetForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const newPassword = document.getElementById('newPassword').value;
+                const confirmPassword = document.getElementById('confirmPassword').value;
+                
+                // 验证必填字段
+                if (!newPassword || !confirmPassword) {
+                    Utils.showNotification('请填写完整的密码信息', 'warning');
+                    return;
+                }
+                
+                // 验证密码匹配
+                if (newPassword !== confirmPassword) {
+                    Utils.showNotification('两次输入的密码不一致', 'warning');
+                    return;
+                }
+                
+                // 验证密码强度
+                if (ResetApp.passwordStrength < 2) {
+                    Utils.showNotification('密码强度太弱，请设置更复杂的密码', 'warning');
+                    return;
+                }
+                
+                const formData = { newPassword };
+                await handlePasswordReset(formData);
+            });
+
+            // 密码显示/隐藏切换
+            document.getElementById('toggleNewPassword').addEventListener('click', () => {
+                const passwordInput = document.getElementById('newPassword');
+                const toggleIcon = document.querySelector('#toggleNewPassword i');
+                
+                if (passwordInput.type === 'password') {
+                    passwordInput.type = 'text';
+                    toggleIcon.className = 'fas fa-eye-slash';
+                } else {
+                    passwordInput.type = 'password';
+                    toggleIcon.className = 'fas fa-eye';
+                }
+            });
+
+            document.getElementById('toggleConfirmPassword').addEventListener('click', () => {
+                const passwordInput = document.getElementById('confirmPassword');
+                const toggleIcon = document.querySelector('#toggleConfirmPassword i');
+                
+                if (passwordInput.type === 'password') {
+                    passwordInput.type = 'text';
+                    toggleIcon.className = 'fas fa-eye-slash';
+                } else {
+                    passwordInput.type = 'password';
+                    toggleIcon.className = 'fas fa-eye';
+                }
+            });
+
+            // 密码强度检测
+            document.getElementById('newPassword').addEventListener('input', (e) => {
+                updatePasswordStrength(e.target.value);
+                validatePasswordMatch();
+                updateResetButton();
+            });
+
+            // 确认密码验证
+            document.getElementById('confirmPassword').addEventListener('input', () => {
+                validatePasswordMatch();
+                updateResetButton();
+            });
+        }
+
+        // 页面初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            const code = getResetCode();
+            
+            if (!code) {
+                showState('errorState');
+                document.getElementById('errorMessage').textContent = '缺少重置码参数';
+                return;
+            }
+
+            ResetApp.resetCode = code;
+            
+            // 验证重置码
+            setTimeout(() => {
+                verifyResetCode(code);
+            }, 1000);
+
+            // 设置事件监听器
+            setupEventListeners();
+        });
+    </script>
+</body>
+</html>

@@ -58,7 +58,7 @@
                 <!-- 用户名输入 -->
                 <div>
                     <label for="username" class="block text-sm font-medium text-white mb-2">
-                        <i class="fas fa-user mr-2 text-indigo-300"></i>{{.T.Username}}/{{.T.Email}}/{{.T.Phone}}
+                        <i class="fas fa-user mr-2 text-indigo-300"></i>{{.T.Email}}
                     </label>
                     <input 
                         type="text" 
@@ -66,7 +66,7 @@
                         name="username" 
                         required
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none input-focus transition-all duration-300"
-                        placeholder="{{.T.Username}}/{{.T.Email}}/{{.T.Phone}}"
+                        placeholder="{{.T.Email}}"
                     >
                 </div>
 
@@ -100,7 +100,7 @@
                         <input type="checkbox" id="rememberMe" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                         <span class="ml-2 text-sm text-white">{{.T.RememberMe}}</span>
                     </label>
-                    <a href="#" class="text-sm text-indigo-300 hover:text-indigo-200 transition-colors">{{.T.ForgotPassword}}</a>
+                    <a href="/forget" class="text-sm text-indigo-300 hover:text-indigo-200 transition-colors">{{.T.ForgotPassword}}</a>
                 </div>
 
                 <!-- 登录按钮 -->
@@ -120,14 +120,16 @@
             </div>
 
             <!-- 第三方登录 -->
-            <div class="space-y-3">
-                <button class="w-full flex items-center justify-center px-4 py-3 border border-white/30 rounded-lg hover:bg-white/10 transition-colors backdrop-blur-sm">
-                    <i class="fab fa-google text-red-400 mr-3"></i>
-                    <span class="text-white">使用 Google 登录</span>
+            <div class="flex space-x-3">
+                <button disabled class="flex-1 flex items-center justify-center px-4 py-3 border border-white/20 rounded-lg bg-white/5 cursor-not-allowed opacity-60">
+                    <i class="fab fa-google text-red-400 mr-2"></i>
+                    <span class="text-white text-sm">Google</span>
+                    <span class="text-white/60 text-xs ml-1">(暂不支持)</span>
                 </button>
-                <button class="w-full flex items-center justify-center px-4 py-3 border border-white/30 rounded-lg hover:bg-white/10 transition-colors backdrop-blur-sm">
-                    <i class="fab fa-github text-white mr-3"></i>
-                    <span class="text-white">使用 GitHub 登录</span>
+                <button disabled class="flex-1 flex items-center justify-center px-4 py-3 border border-white/20 rounded-lg bg-white/5 cursor-not-allowed opacity-60">
+                    <i class="fab fa-github text-white mr-2"></i>
+                    <span class="text-white text-sm">GitHub</span>
+                    <span class="text-white/60 text-xs ml-1">(暂不支持)</span>
                 </button>
             </div>
 
@@ -138,9 +140,8 @@
                         <i class="fas fa-arrow-left mr-2"></i>
                         返回首页
                     </a>
-                    <p class="text-white">
-                        {{.T.NoAccount}}
-                        <a href="/signup" class="text-indigo-300 hover:text-indigo-200 font-medium transition-colors">{{.T.SigninNow}}</a>
+                    <p class="text-white">{{.T.NoAccount}}
+                        <a href="/signup" class="text-indigo-300 hover:text-indigo-200 font-medium transition-colors">{{.T.SignUpNow}}</a>
                     </p>
                 </div>
             </div>
@@ -304,17 +305,6 @@
                     passwordInput.type = 'password';
                     toggleIcon.className = 'fas fa-eye';
                 }
-            });
-
-            // 输入框焦点效果
-            document.querySelectorAll('input').forEach(input => {
-                input.addEventListener('focus', () => {
-                    input.parentElement.classList.add('ring-2', 'ring-indigo-500', 'ring-opacity-50');
-                });
-                
-                input.addEventListener('blur', () => {
-                    input.parentElement.classList.remove('ring-2', 'ring-indigo-500', 'ring-opacity-50');
-                });
             });
         }
 

@@ -50,7 +50,7 @@ func (h *AdminHandle) CreateUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, model.RegisterResponse{
+	c.JSON(http.StatusCreated, model.SignUpResponse{
 		User: user, APIKey: user.APIKey, Message: "注册成功",
 	})
 }
@@ -95,7 +95,7 @@ func (h *AdminHandle) GenerateAPIKey(c *gin.Context) {
 // DeleteUser 删除用户（管理员功能）
 func (h *AdminHandle) DeleteUser(c *gin.Context) {
 	userID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := h.userService.DeleteUser(uint(userID)); err != nil {
+	if err := h.userService.DeleteUser(userID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

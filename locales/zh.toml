@@ -139,7 +139,7 @@ other = "登录"
 [NoAccount]
 other = "还没有账号？"
 
-[RegisterNow]
+[SignUpNow]
 other = "立即注册"
 
 [SignInWith]
