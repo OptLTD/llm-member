@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"llm-member/internal/model"
 	"llm-member/internal/service"
-	"llm-member/internal/support"
 	"net/http"
 	"strings"
 	"time"
@@ -127,9 +126,7 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 	// 准备日志数据
 	var streamErr error
 	var response strings.Builder
-	var respUsage *model.Usage
-	// 收集流式响应选择数据用于精确token计算
-	var streamChoices []support.ChatCompletionsStreamResponseChoice
+	var tokenUsage *model.Usage
 
 	// 定义完成处理的内部函数
 	logAndFinish := func(err error) {
@@ -137,30 +134,9 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 		c.Writer.Write([]byte("data: [DONE]\n\n"))
 		c.Writer.Flush()
 
-		// 如果没有从流中获取到usage信息，进行估算
-		if respUsage == nil && response.Len() > 0 {
-			// 使用support.CountTokenInput计算prompt tokens
-			promptTokens := support.CountTokenInput(req, req.Model)
-
-			// 如果收集了流式响应数据，使用CountTokenStreamChoices
-			var completionTokens int
-			if len(streamChoices) > 0 {
-				completionTokens = support.CountTokenStreamChoices(streamChoices, req.Model)
-			} else {
-				// fallback到文本计算
-				completionTokens = support.CountTextToken(response.String(), req.Model)
-			}
-
-			respUsage = &model.Usage{
-				PromptTokens:     promptTokens,
-				CompletionTokens: completionTokens,
-			}
-			respUsage.TotalTokens = respUsage.PromptTokens + respUsage.CompletionTokens
-		}
-
 		// 调用外部传入的callback
 		if callback != nil {
-			callback(err, &response, respUsage)
+			callback(err, &response, tokenUsage)
 		}
 	}
 
@@ -174,22 +150,12 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 			}
 
 			// 检查是否包含usage信息（通常在最后一个响应中）
-			if resp.Usage != nil {
-				respUsage = resp.Usage
+			if resp != nil && resp.Usage != nil {
+				tokenUsage = resp.Usage
 				// 如果这是只包含Usage信息的响应，不发送给客户端
 				if resp.ID == "" && len(resp.Choices) == 0 {
 					continue
 				}
-			}
-
-			// 收集流式响应选择数据用于token计算
-			for _, choice := range resp.Choices {
-				streamChoices = append(streamChoices, support.ChatCompletionsStreamResponseChoice{
-					Delta: support.StreamDelta{
-						Content:   choice.Delta.Content,
-						ToolCalls: nil, // 如果有工具调用，需要转换
-					},
-				})
 			}
 
 			// 发送数据到客户端

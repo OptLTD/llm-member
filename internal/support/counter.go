@@ -1,7 +1,5 @@
 package support
 
-// copy from :
-// https://github.com/QuantumNous/new-api/blob/main/service/token_counter.go
 import (
 	"encoding/json"
 	"errors"
@@ -15,28 +13,6 @@ import (
 	"github.com/tiktoken-go/tokenizer/codec"
 )
 
-// 常量定义
-const (
-	GetMediaToken          = true
-	GetMediaTokenNotStream = false
-)
-
-// 渠道类型常量
-const (
-	ChannelTypeGemini    = 1
-	ChannelTypeVertexAi  = 2
-	ChannelTypeAnthropic = 3
-)
-
-// 内容类型常量
-const (
-	ContentTypeText       = "text"
-	ContentTypeImageURL   = "image_url"
-	ContentTypeInputAudio = "input_audio"
-	ContentTypeFile       = "file"
-	ContentTypeVideoUrl   = "video_url"
-)
-
 // RelayInfo 中继信息结构
 type RelayInfo struct {
 	ChannelType       int
@@ -44,13 +20,6 @@ type RelayInfo struct {
 	InputAudioFormat  string
 	OutputAudioFormat string
 	RealtimeTools     []string
-}
-
-// MessageImageUrl 图片消息结构
-type MessageImageUrl struct {
-	Url      string `json:"url"`
-	Detail   string `json:"detail,omitempty"`
-	MimeType string `json:"mime_type,omitempty"`
 }
 
 // GeneralOpenAIRequest OpenAI请求结构
@@ -81,12 +50,6 @@ type Message struct {
 	Role    string      `json:"role"`
 	Content interface{} `json:"content"`
 	Name    *string     `json:"name,omitempty"`
-}
-
-// MessageContent 消息内容结构
-type MessageContent struct {
-	Type string `json:"type"`
-	Text string `json:"text,omitempty"`
 }
 
 // Tool 工具结构
@@ -213,46 +176,11 @@ func getTokenNum(tokenEncoder tokenizer.Codec, text string) int {
 	if text == "" {
 		return 0
 	}
+	if tokenEncoder == nil {
+		return 0
+	}
 	tkm, _ := tokenEncoder.Count(text)
 	return tkm
-}
-
-// 简化的图片token计算函数
-func getImageToken(info *RelayInfo, imageUrl *MessageImageUrl, model string, stream bool) (int, error) {
-	if imageUrl == nil {
-		return 0, fmt.Errorf("image_url_is_nil")
-	}
-	baseTokens := 85
-	if model == "glm-4v" {
-		return 1047, nil
-	}
-	if imageUrl.Detail == "low" {
-		return baseTokens, nil
-	}
-	if !GetMediaTokenNotStream && !stream {
-		return 3 * baseTokens, nil
-	}
-
-	// 简化的图片计费逻辑
-	if imageUrl.Detail == "auto" || imageUrl.Detail == "" {
-		imageUrl.Detail = "high"
-	}
-
-	// tileTokens := 170
-	if strings.HasPrefix(model, "gpt-4o-mini") {
-		// tileTokens = 5667
-		baseTokens = 2833
-	}
-	// 是否统计图片token
-	if !GetMediaToken {
-		return 3 * baseTokens, nil
-	}
-	if info.ChannelType == ChannelTypeGemini || info.ChannelType == ChannelTypeVertexAi || info.ChannelType == ChannelTypeAnthropic {
-		return 3 * baseTokens, nil
-	}
-
-	// 简化处理，返回固定值
-	return 3 * baseTokens, nil
 }
 
 func CountTokenChatRequest(info *RelayInfo, request GeneralOpenAIRequest) (int, error) {
@@ -389,13 +317,11 @@ func CountTokenRealtime(info *RelayInfo, request RealtimeEvent, model string) (i
 		}
 	case RealtimeEventTypeResponseDone:
 		// count tools token
-		if !info.IsFirstRequest {
-			if info.RealtimeTools != nil && len(info.RealtimeTools) > 0 {
-				for _, tool := range info.RealtimeTools {
-					toolTokens := CountTokenInput(tool, model)
-					textToken += 8
-					textToken += toolTokens
-				}
+		if !info.IsFirstRequest && len(info.RealtimeTools) > 0 {
+			for _, tool := range info.RealtimeTools {
+				toolTokens := CountTokenInput(tool, model)
+				textToken += 8
+				textToken += toolTokens
 			}
 		}
 	}

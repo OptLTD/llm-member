@@ -13,6 +13,7 @@ import (
 
 	"llm-member/internal/config"
 	"llm-member/internal/model"
+	"llm-member/internal/support"
 
 	"github.com/google/uuid"
 	"github.com/sashabaranov/go-openai"
@@ -455,12 +456,11 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 			}
 
 			streamChoice := model.ChatStreamChoice{
-				Index: i,
+				Index: i, FinishReason: finishReason,
 				Delta: model.ChatStreamDelta{
 					Role:    choice.Delta.Role,
 					Content: choice.Delta.Content,
 				},
-				FinishReason: finishReason,
 			}
 			streamResp.Choices = append(streamResp.Choices, streamChoice)
 
@@ -480,16 +480,25 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 	// 流结束后，发送一个包含Usage估算的最终响应
 	if isStreamComplete && fullContent.Len() > 0 {
 		// 估算token使用量
-		promptTokens := s.estimatePromptTokens(req.Messages)
-		completionTokens := s.estimateCompletionTokens(fullContent.String())
+		// 转换消息格式为support.Message
+		var supportMessages []support.Message
+		for _, msg := range req.Messages {
+			supportMessages = append(supportMessages, support.Message{
+				Role: msg.Role, Content: msg.Content,
+			})
+		}
+
+		// 使用support.counter的方法计算token
+		relayInfo := &support.RelayInfo{}
+		promptTokens, _ := support.CountTokenMessages(relayInfo, supportMessages, req.Model, true)
+		completionTokens := support.CountTextToken(fullContent.String(), req.Model)
 		totalTokens := promptTokens + completionTokens
 
 		// 发送包含Usage信息的最终响应
 		finalResp := &model.ChatStreamResponse{
-			ID:      "", // 空ID表示这是Usage信息
+			Model: req.Model, ID: "", // 空ID表示这是Usage信息
 			Object:  "chat.completion.chunk",
 			Created: time.Now().Unix(),
-			Model:   req.Model,
 			Usage: &model.Usage{
 				PromptTokens:     promptTokens,
 				CompletionTokens: completionTokens,
@@ -503,28 +512,6 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 			return
 		}
 	}
-}
-
-// estimatePromptTokens 估算输入token数量
-func (s *RelayService) estimatePromptTokens(messages []model.ChatMessage) int {
-	var totalChars int
-	for _, msg := range messages {
-		// 计算角色和内容的字符数
-		totalChars += len([]rune(msg.Role + msg.Content))
-	}
-	// 粗略估算：平均每4个字符约等于1个token
-	// 对于中文，这个比例可能需要调整
-	return (totalChars + 3) / 4 // 向上取整
-}
-
-// estimateCompletionTokens 估算输出token数量
-func (s *RelayService) estimateCompletionTokens(content string) int {
-	if content == "" {
-		return 0
-	}
-	// 粗略估算：平均每4个字符约等于1个token
-	runes := []rune(content)
-	return (len(runes) + 3) / 4 // 向上取整
 }
 
 // streamWithHTTP 使用 HTTP 进行流式调用

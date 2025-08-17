@@ -24,6 +24,9 @@ func NewSetupService() *SetupService {
 }
 
 func HandleInit() error {
+	// 初始化token编码器
+	support.InitTokenEncoders()
+	
 	s := &SetupService{
 		db:  config.GetDB(),
 		cfg: config.Load(),
