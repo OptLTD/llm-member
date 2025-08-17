@@ -40,7 +40,7 @@ cp .env.example .env
 # 服务器配置
 PORT=8080
 GIN_MODE=debug
-DB_PATH=./data/app.db
+DATA_PATH=/data
 
 # 管理员配置
 ADMIN_USERNAME=admin

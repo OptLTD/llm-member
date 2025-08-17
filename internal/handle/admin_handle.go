@@ -78,9 +78,8 @@ func (h *AdminHandle) UpdateUser(c *gin.Context) {
 
 // RegenerateAPIKey 重新生成用户 API Key
 func (h *AdminHandle) GenerateAPIKey(c *gin.Context) {
-	userID, _ := strconv.ParseUint(c.Param("id"), 10, 32)
-
-	user, err := h.userService.RegenerateKey(uint(userID))
+	userID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	user, err := h.userService.RegenerateKey(userID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -127,15 +126,7 @@ func (h *AdminHandle) ToggleUserStatus(c *gin.Context) {
 
 // Current 获取当前用户信息
 func (h *AdminHandle) Current(c *gin.Context) {
-	var user_id uint64
-	if userID, exists := c.Get("user_id"); !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未找到用户信息"})
-		return
-	} else {
-		user_id = userID.(uint64)
-	}
-
-	user, err := h.userService.GetUserByID(user_id)
+	user, err := h.userService.GetUserByID(c.GetUint64("UserID"))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
 		return

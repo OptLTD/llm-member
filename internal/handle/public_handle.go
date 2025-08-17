@@ -57,6 +57,8 @@ func StaticRouteHandle(cfg *config.Config) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		switch c.Request.URL.Path {
+		case "/authorization":
+			RenderPage(c, "signin")
 		case "/", "/index.html":
 			RenderPage(c, "index")
 		case "/admin", "/admin.html":

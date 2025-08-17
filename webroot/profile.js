@@ -12,13 +12,14 @@ const DataManager = {
   // 加载用户资料
   async loadUserProfile() {
     try {
-
       const data = await Utils.apiRequest(
         `/api/profile`,{ method: "GET" }
       );
+      console.log(data, 'dddddd')
       ProfileApp.user = data.user;
       this.updateProfileUI();
     } catch (error) {
+      console.log(error, "dddddd");
       Utils.showNotification(error.message, "error");
       // 如果未授权，跳转到登录页
       if (error.message.includes("未授权")) {
@@ -457,11 +458,13 @@ async function checkAuth() {
 
   // 验证token有效性
   try {
-    await Utils.apiRequest(
+    const resp = await Utils.apiRequest(
       `/api/profile`, { method: "GET" }
     );
+    console.log(resp, 'dddd1')
     return true;
   } catch (error) {
+    console.log(error, "dddd1");
     // token无效，已在apiRequest中处理跳转
     return false;
   }

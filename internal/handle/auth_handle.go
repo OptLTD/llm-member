@@ -1,11 +1,14 @@
 package handle
 
 import (
+	"fmt"
+	"llm-member/internal/config"
 	"llm-member/internal/model"
 	"llm-member/internal/service"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -71,24 +74,6 @@ func (h *AuthHandle) UserSignUp(c *gin.Context) {
 		User: user, APIKey: user.APIKey,
 		Message: "注册成功，请检查您的邮箱以获取验证链接。",
 	})
-}
-
-// VerifySignUpCode handles email verification.
-func (h *AuthHandle) VerifySignUpCode(c *gin.Context) {
-	var req struct {
-		Code string `json:"code"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil || req.Code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "验证码不能为空"})
-		return
-	}
-
-	err := h.authService.VerifySignupCode(req.Code)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"message": "邮箱验证成功"})
 }
 
 // UserSignIn 用户登录（用户端）
@@ -246,6 +231,110 @@ func (h *AuthHandle) ResetPassword(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "密码重置成功"})
+}
+
+// VerifySignUpCode handles email verification.
+func (h *AuthHandle) VerifySignUpCode(c *gin.Context) {
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "验证码不能为空"})
+		return
+	}
+
+	err := h.authService.VerifySignupCode(req.Code)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "邮箱验证成功"})
+}
+
+// BuildCallbackToken 生成回调token并跳转
+func (h *AuthHandle) BuildCallbackToken(c *gin.Context) {
+	// 获取用户信息
+	user, err := h.userService.GetUserByID(c.GetUint64("UserID"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
+		return
+	}
+
+	// 生成临时token（有效期较短，如5分钟）
+	token, err := h.authService.GenerateCallbackToken(user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成回调token失败"})
+		return
+	}
+
+	// 生成签名
+	sign, err := h.authService.GenerateCallbackSign(token, user.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成签名失败"})
+		return
+	}
+
+	// 获取AUTH_CALLBACK配置
+	callback_url := config.GetAuthCallback()
+	if callback_url == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "未配置AUTH_CALLBACK"})
+		return
+	}
+
+	// 构建回调URL
+	timestamp := time.Now().Unix()
+	callbackURL := fmt.Sprintf("%s?token=%s&sign=%s&time=%s",
+		callback_url, token, sign, timestamp,
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"time":  timestamp,
+		"token": token, "sign": sign,
+		"callback_url": callbackURL,
+	})
+}
+
+// VerifyCallbackToken 验证回调token
+func (h *AuthHandle) VerifyCallbackToken(c *gin.Context) {
+	var req struct {
+		Token string `json:"token" binding:"required"`
+		Sign  string `json:"sign" binding:"required"`
+		Time  string `json:"time" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少参数"})
+		return
+	}
+
+	// 验证token
+	token, _ := h.authService.ValidateCallbackToken(req.Token)
+	if token == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "token无效"})
+		return
+	}
+	// 获取用户信息
+	user, err := h.userService.GetUserByID(token.UserID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
+		return
+	}
+	// 验证签名
+	sign, err := h.authService.GenerateCallbackSign(req.Token, user.Email)
+	if err != nil || sign != req.Sign {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "签名验证失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, user.ToUserResponse())
+}
+
+func (h *AuthHandle) GetUserProfile(c *gin.Context) {
+	user, err := h.userService.GetUserByID(c.GetUint64("UserID"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
+		return
+	}
+	c.JSON(http.StatusOK, user.ToUserResponse())
 }
 
 // ThirdSignin 第三方登录（用户端）

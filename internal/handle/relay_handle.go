@@ -28,44 +28,6 @@ func NewRelayHandle() *RelayHandle {
 	}
 }
 
-// TestChat 测试用聊天接口（使用 Web Token 认证）
-func (h *RelayHandle) TestChat(c *gin.Context) {
-	var req model.ChatRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// 获取用户信息（从 Web Token 认证中间件）
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未找到用户信息"})
-		return
-	}
-
-	// 获取用户详细信息
-	user, err := h.userService.GetUserByID(userID.(uint64))
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
-		return
-	}
-
-	startTime := time.Now()
-
-	// 调用 LLM 服务
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	// 检查是否为流式请求
-	if req.Stream {
-		h.handleStreamResponse(c, ctx, &req, user, startTime)
-		return
-	}
-
-	// 非流式响应
-	h.handleNonStreamResponse(c, ctx, &req, user, startTime)
-}
-
 // ChatCompletions 聊天完成处理
 func (h *RelayHandle) ChatCompletions(c *gin.Context) {
 	var req model.ChatRequest

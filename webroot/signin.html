@@ -46,7 +46,7 @@
     </div>
 
     <!-- 登录容器 -->
-    <div class="relative z-10 w-full max-w-md">
+    <div id="signInContainer" class="relative z-10 w-full max-w-md">
         <!-- 标题 -->
         <div class="text-center mb-8">
             <h1 class="text-3xl font-bold text-white">{{.T.SignInTitle}}</h1>
@@ -108,7 +108,7 @@
                     type="submit" 
                     class="w-full btn-primary text-white py-3 px-4 rounded-lg font-medium focus:outline-none focus:ring-4 focus:ring-indigo-300"
                 >
-                    <i class="fas fa-sign-in-alt mr-2"></i>{{.T.SignInButton}}
+                    <i class="fas fa-sign-in-alt mr-2"></i>{{.T.SignIn}}
                 </button>
             </form>
 
@@ -150,6 +150,26 @@
 
     <!-- 通知容器 -->
     <div id="notification-container" class="fixed top-4 right-4 z-50"></div>
+
+    <!-- 在</body>标签前添加弹窗HTML -->
+    <!-- App登录确认弹窗 -->
+    <div id="appLoginModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="glass-effect rounded-2xl p-8 max-w-md mx-4">
+            <div class="text-center">
+                <i class="fas fa-mobile-alt text-4xl text-indigo-300 mb-4"></i>
+                <h3 class="text-xl font-bold text-white mb-4">登录到应用</h3>
+                <p class="text-white/80 mb-6">检测到您已登录，是否要登录到第三方应用？</p>
+                <div class="flex space-x-4">
+                    <button id="cancelAppLogin" class="flex-1 px-4 py-2 border border-white/20 rounded-lg text-white hover:bg-white/10 transition-colors">
+                        取消
+                    </button>
+                    <button id="confirmAppLogin" class="flex-1 px-4 py-2 btn-primary text-white rounded-lg">
+                        确认登录
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
         // 全局状态
@@ -240,12 +260,22 @@
                 const data = await Utils.apiRequest('/api/signin', {
                     body: JSON.stringify({ username, password })
                 });
+                // 检查是否为authorization路由
+                const path = window.location.pathname;
+                if (path.indexOf('/authorization') > -1) {
+                    showAppLoginModal();
+                    Utils.showNotification('登录成功！', 'success');
+                } else {
+                    Utils.showNotification('登录成功！正在跳转...', 'success');
+                }
                 
                 // 存储登录信息
                 localStorage.setItem('userToken', data.token);
                 localStorage.setItem('userData', JSON.stringify(data.user));
-                Utils.showNotification('登录成功！正在跳转...', 'success');
                 setTimeout(() => {
+                    if (path.indexOf('/authorization') > -1) {
+                        return;
+                    }
                     const prevPage = localStorage.getItem('prevPage');
                     if (prevPage === '/payment') {
                         localStorage.removeItem('prevPage');
@@ -311,7 +341,10 @@
         // 检查是否已登录
         function checkExistingSignin() {
             const token = localStorage.getItem('userToken');
-            if (token) {
+            const path = window.location.pathname;
+            if (path === '/authorization' && token) {
+                showAppLoginModal();
+            } else if (token) {
                 Utils.showNotification('您已登录，正在跳转...', 'info');
                 setTimeout(() => {
                     window.location.href = '/profile';
@@ -319,10 +352,59 @@
             }
         }
 
+        // 显示App登录弹窗
+        function showAppLoginModal() {
+            const modal = document.getElementById('appLoginModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            const signInContainer = document.getElementById('signInContainer');
+            signInContainer.classList.add('hidden');
+        }
+
+        // 隐藏App登录弹窗
+        function hideAppLoginModal() {
+            // const signInContainer = document.getElementById('signInContainer');
+            // signInContainer.classList.remove('hidden');
+
+            const modal = document.getElementById('appLoginModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            localStorage.removeItem('prevPage');
+            window.location.href = '/profile';
+        }
+
+        // 确认登录到App
+        async function confirmAppLogin() {
+            try {
+                const token = localStorage.getItem('userToken');
+                const data = await Utils.apiRequest('/v1/build-token', {
+                    method: 'POST', headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                if (data.callback_url) { // 跳转到回调URL
+                    window.location.href = data.callback_url;
+                } else {
+                    Utils.showNotification(data.error || '生成token失败', 'error');
+                }
+            } catch (error) {
+                Utils.showNotification('网络错误，请重试', 'error');
+            }
+        }
+
+        // 设置事件监听器
+        function setupAppLoginEventListeners() {
+            document.getElementById('cancelAppLogin').addEventListener('click', hideAppLoginModal);
+            document.getElementById('confirmAppLogin').addEventListener('click', confirmAppLogin);
+        }
+
         // 页面初始化
         document.addEventListener('DOMContentLoaded', () => {
             checkExistingSignin();
             setupEventListeners();
+            setupAppLoginEventListeners(); // 新增
             
             // 聚焦到用户名输入框
             document.getElementById('username').focus();

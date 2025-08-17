@@ -28,13 +28,7 @@ func NewBasicHandle() *BasicHandle {
 
 // GetUserProfile 获取用户个人资料
 func (h *BasicHandle) GetUserProfile(c *gin.Context) {
-	user_id, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未授权"})
-		return
-	}
-
-	user, err := h.userService.GetUserByID(user_id.(uint64))
+	user, err := h.userService.GetUserByID(c.GetUint64("UserID"))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
 		return
@@ -48,13 +42,7 @@ func (h *BasicHandle) GetUserProfile(c *gin.Context) {
 // SetUserProfile 更新用户个人资料
 func (h *BasicHandle) SetUserProfile(c *gin.Context) {
 	updateReq := &model.UpdateUserRequest{}
-	if userID, exists := c.Get("user_id"); !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未授权"})
-		return
-	} else {
-		updateReq.UserId, _ = userID.(uint64)
-	}
-
+	updateReq.UserId = c.GetUint64("UserID")
 	var req struct {
 		Email string `json:"email,omitempty"`
 		Phone string `json:"phone,omitempty"`
@@ -86,17 +74,11 @@ func (h *BasicHandle) SetUserProfile(c *gin.Context) {
 
 // GetUserUsage 获取用户使用统计
 func (h *BasicHandle) GetUserUsage(c *gin.Context) {
-	user_id, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未授权"})
-		return
-	}
-
 	// 获取时间范围参数
 	period := c.DefaultQuery("period", "month") // day, week, month, year
 
 	// 简单的使用统计，实际应该在UserService中实现GetUserUsageStats方法
-	user, err := h.userService.GetUserByID(user_id.(uint64))
+	user, err := h.userService.GetUserByID(c.GetUint64("UserID"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取使用统计失败"})
 		return
@@ -116,13 +98,7 @@ func (h *BasicHandle) GetUserUsage(c *gin.Context) {
 
 // GetUserAPIKeys 获取用户API密钥
 func (h *BasicHandle) GetUserAPIKeys(c *gin.Context) {
-	user_id, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未授权"})
-		return
-	}
-
-	user, err := h.userService.GetUserByID(user_id.(uint64))
+	user, err := h.userService.GetUserByID(c.GetUint64("UserID"))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
 		return
@@ -135,13 +111,7 @@ func (h *BasicHandle) GetUserAPIKeys(c *gin.Context) {
 
 // GetUserOrders 用户订单
 func (h *BasicHandle) GetUserOrders(c *gin.Context) {
-	user_id, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未授权"})
-		return
-	}
-
-	data, err := h.userService.GetUserOrders(user_id.(uint64))
+	data, err := h.userService.GetUserOrders(c.GetUint64("UserID"))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
 		return
@@ -152,13 +122,7 @@ func (h *BasicHandle) GetUserOrders(c *gin.Context) {
 
 // RegenerateKey 重新生成用户API密钥
 func (h *BasicHandle) RegenerateKey(c *gin.Context) {
-	user_id, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未授权"})
-		return
-	}
-
-	user, err := h.userService.RegenerateKey(user_id.(uint))
+	user, err := h.userService.RegenerateKey(c.GetUint64("UserID"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "重新生成API密钥失败"})
 		return

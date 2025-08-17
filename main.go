@@ -51,10 +51,17 @@ func main() {
 
 	r.Use(handle.StaticRouteHandle(cfg))
 	authService := service.NewAuthService()
-	compatibleV1 := r.Group("/compatible-v1", auth.APIKeyMiddleware(authService))
+	v1 := r.Group("/v1")
 	{
-		r := handle.NewRelayHandle()
-		compatibleV1.POST("/chat/completions", r.ChatCompletions)
+		relayHandle := handle.NewRelayHandle()
+		authHandle := handle.NewAuthHandle(authService)
+		authMiddle := auth.AuthMiddleware(authService)
+		keyMiddle := auth.APIKeyMiddleware(authService)
+
+		v1.POST("/build-token", authMiddle, authHandle.BuildCallbackToken) // 启用路由
+		v1.POST("/verify-token", auth.NoneMiddleware(), authHandle.VerifyCallbackToken)
+		v1.POST("/user-profile", keyMiddle, authHandle.GetUserProfile)
+		v1.POST("/chat/completions", keyMiddle, relayHandle.ChatCompletions)
 	}
 
 	api := r.Group("/api")

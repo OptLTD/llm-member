@@ -109,7 +109,7 @@ func (s *UserService) UpdateUser(req *model.UpdateUserRequest) (*model.UserModel
 }
 
 // RegenerateKey 重新生成 API Key
-func (s *UserService) RegenerateKey(userID uint) (*model.UserModel, error) {
+func (s *UserService) RegenerateKey(userID uint64) (*model.UserModel, error) {
 	var user model.UserModel
 	if err := s.db.First(&user, userID).Error; err != nil {
 		return nil, fmt.Errorf("用户不存在")

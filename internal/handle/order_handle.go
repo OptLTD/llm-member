@@ -84,7 +84,7 @@ func (h *OrderHandler) ShowPaymentQrcode(c *gin.Context) {
 		return
 	}
 
-	if uid, exists := c.Get("user_id"); !exists || uid == 0 {
+	if uid, exists := c.Get("UserID"); !exists || uid == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户未登录"})
 		return
 	} else if order.UserID != uid.(uint64) {
@@ -127,7 +127,7 @@ func (h *OrderHandler) ShowPaymentQrcode(c *gin.Context) {
 // CreatePaymentOrder 创建支付订单
 func (h *OrderHandler) CreatePaymentOrder(c *gin.Context) {
 	var uid uint64
-	if id, exists := c.Get("user_id"); !exists {
+	if id, exists := c.Get("UserID"); !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "未授权"})
 		return
 	} else if uid, _ = id.(uint64); uid == 0 {
@@ -184,7 +184,7 @@ func (h *OrderHandler) QueryPaymentOrder(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "订单不存在"})
 		return
 	}
-	if uid, exists := c.Get("user_id"); !exists || uid == 0 {
+	if uid, exists := c.Get("UserID"); !exists || uid == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户未登录"})
 		return
 	} else if order.UserID != uid.(uint64) {

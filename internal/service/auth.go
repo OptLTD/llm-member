@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -427,4 +428,39 @@ func (s *AuthService) DeleteToken(token string) {
 	s.mutex.Lock()
 	delete(s.token, token)
 	s.mutex.Unlock()
+}
+
+// GenerateCallbackToken 生成回调token
+func (s *AuthService) GenerateCallbackToken(user *model.UserModel) (string, error) {
+	token, err := s.generateToken()
+	if err != nil {
+		return "", err
+	}
+
+	// 存储临时token信息（5分钟有效期）
+	tokenInfo := &TokenInfo{
+		UserID:  user.ID,
+		IsAdmin: user.UserRole == model.RoleAdmin,
+		Expiry:  time.Now().Add(5 * time.Minute), // 临时token有效期5分钟
+	}
+
+	err = s.SetToken(token, tokenInfo)
+	if err != nil {
+		return "", fmt.Errorf("存储临时token失败: %v", err)
+	}
+
+	return token, nil
+}
+
+// GenerateCallbackSign 生成回调签名
+func (s *AuthService) GenerateCallbackSign(token, email string) (string, error) {
+	// 使用简单的签名算法，实际项目中应使用更安全的方法
+	data := fmt.Sprintf("%s:%s:%d", token, email, time.Now().Unix())
+	hash := sha256.Sum256([]byte(data))
+	return fmt.Sprintf("sn-%x", hash[:16]), nil
+}
+
+// ValidateCallbackToken 验证 token
+func (s *AuthService) ValidateCallbackToken(token string) (*TokenInfo, bool) {
+	return s.GetToken(token)
 }

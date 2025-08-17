@@ -8,9 +8,7 @@ services:
       - GIN_MODE=test
       - APP_NAME=Swiflow
       - APP_DESC=LLM会员管理系统
-      - STORAGE_DIR=/app/storage
-      - DB_PATH=/app/storage/app.db
-      - LOG_FILE=/app/storage/app.log
+      - DATA_PATH=/app/storage
       # 数据库配置
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306

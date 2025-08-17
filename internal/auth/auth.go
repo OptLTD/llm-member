@@ -40,9 +40,7 @@ func AuthMiddleware(authService *service.AuthService) gin.HandlerFunc {
 			return
 		}
 
-		// 将用户信息存储到上下文中
-		c.Set("user_id", tokenInfo.UserID)
-		c.Set("is_admin", tokenInfo.IsAdmin)
+		c.Set("UserID", tokenInfo.UserID)
 		c.Next()
 	}
 }
@@ -74,7 +72,7 @@ func APIKeyMiddleware(authService *service.AuthService) gin.HandlerFunc {
 
 		// 将用户信息存储到上下文中
 		c.Set("user", user)
-		c.Set("user_id", user.ID)
+		c.Set("UserID", user.ID)
 		c.Next()
 	}
 }
@@ -110,8 +108,8 @@ func AdminMiddleware(authService *service.AuthService) gin.HandlerFunc {
 		}
 
 		// 将用户信息存储到上下文中
-		c.Set("user_id", tokenInfo.UserID)
-		c.Set("is_admin", tokenInfo.IsAdmin)
+		c.Set("UserID", tokenInfo.UserID)
+		c.Set("IsAdmin", tokenInfo.IsAdmin)
 		c.Next()
 	}
 }

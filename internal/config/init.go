@@ -17,8 +17,7 @@ type Config struct {
 	AppDesc string
 	AppHost string
 	GinMode string
-	DBPath  string
-	LogFile string
+	Storage string
 
 	Admin *AdminInfo
 	MySQL *MySQLConfig
@@ -41,8 +40,7 @@ func Load() *Config {
 		AppName: getEnv("APP_NAME", "Demo"),
 		AppDesc: getEnv("APP_DESC", "Desc"),
 		AppHost: getEnv("APP_HOST", "localhost"),
-		DBPath:  getEnv("DB_PATH", "storage/app.db"),
-		LogFile: getEnv("LOG_FILE", "storage/app.log"),
+		Storage: getEnv("DATA_PATH", "./storage"),
 
 		// MySQL配置
 		MySQL: &MySQLConfig{
@@ -106,22 +104,24 @@ func InitRedis(cfg *RedisConfig) error {
 
 // InitLogger 配置日志系统
 func InitLogger(cfg *Config) io.Writer {
-	// 创建必要的目录（基于日志文件和数据库文件路径）
-	logDir := filepath.Dir(cfg.LogFile)
-	if logDir != "." && logDir != "" {
-		if err := os.MkdirAll(logDir, 0755); err != nil {
-			log.Fatal("Failed to create log directory:", err)
-		}
+	if err := os.MkdirAll(cfg.Storage, 0755); err != nil {
+		log.Fatal("Failed to create log directory:", err)
 	}
 
-	// 配置日志文件
-	logFile, err := os.OpenFile(cfg.LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	flag := os.O_CREATE | os.O_WRONLY | os.O_APPEND
+	filename := filepath.Join(cfg.Storage, "app.log")
+	logFile, err := os.OpenFile(filename, flag, 0666)
 	if err != nil {
 		log.Fatal("Failed to open log file:", err)
 	}
 	multiWriter := io.MultiWriter(os.Stdout, logFile)
 	log.SetOutput(multiWriter)
 	return multiWriter
+}
+
+// GetAuthCallback 获取AUTH_CALLBACK配置
+func GetAuthCallback() string {
+	return getEnv("AUTH_CALLBACK", "")
 }
 
 func getEnv(key, defaultValue string) string {

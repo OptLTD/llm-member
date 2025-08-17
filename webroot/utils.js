@@ -162,7 +162,7 @@ const Utils = {
     if (!response.ok) {
       // 如果是401未授权错误，自动跳转到登录页面
       if (response.status === 401) {
-        Auth.logout();
+        Auth.signout();
         const path = location.pathname
         localStorage.setItem("prevPage", path);
         window.location.href = "/signin";
