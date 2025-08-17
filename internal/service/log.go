@@ -1,9 +1,6 @@
 package service
 
 import (
-	"encoding/json"
-	"time"
-
 	"gorm.io/gorm"
 
 	"llm-member/internal/config"
@@ -70,24 +67,4 @@ func (s *LogService) GetLogs(req *model.PaginateRequest) (*model.PaginateRespons
 
 func (s *LogService) DeleteLog(id uint) error {
 	return s.db.Delete(&model.LlmLogModel{}, id).Error
-}
-
-
-
-func (s *LogService) LogRequest(name, provider string, messages []model.ChatMessage, response *model.ChatResponse, duration time.Duration, status, errorMsg, clientIP, userAgent string) {
-	messagesJSON, _ := json.Marshal(messages)
-	responseJSON, _ := json.Marshal(response)
-
-	var tokensUsed int
-	if response != nil {
-		tokensUsed = response.Usage.TotalTokens
-	}
-
-	log := &model.LlmLogModel{
-		TheModel: name, Provider: provider, Status: status,
-		TokensUsed: tokensUsed, Duration: duration.Milliseconds(),
-		ErrorMsg: errorMsg, ClientIP: clientIP, UserAgent: userAgent,
-		Messages: string(messagesJSON), Response: string(responseJSON),
-	}
-	s.CreateLog(log)
 }

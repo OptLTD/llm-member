@@ -104,7 +104,7 @@ class TestChatManager {
         );
       } else {
         const apiKey = localStorage.getItem('apiKey')
-        const url = '/compatible-v1/chat/completions'
+        const url = '/v1/chat/completions'
         const data = await this.app.apiCall(url, {
           method: "POST",
           headers: {
@@ -229,7 +229,7 @@ class TestChatManager {
         throw new Error("Unauthorized");
       }
 
-      const url = '/compatible-v1/chat/completions'
+      const url = '/v1/chat/completions'
       const response = await fetch(url, {
         method: "POST",
         headers: {

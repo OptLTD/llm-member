@@ -344,11 +344,11 @@ func (s *RelayService) callWithHTTP(ctx context.Context, req *model.ChatRequest,
 
 // ChatCompletionsStream 流式聊天完成
 func (s *RelayService) ChatCompletionsStream(ctx context.Context, req *model.ChatRequest) (<-chan *model.ChatStreamResponse, <-chan error) {
-	responseChan := make(chan *model.ChatStreamResponse, 100)
+	respChan := make(chan *model.ChatStreamResponse, 100)
 	errorChan := make(chan error, 1)
 
 	go func() {
-		defer close(responseChan)
+		defer close(respChan)
 		defer close(errorChan)
 
 		// 获取提供商
@@ -367,13 +367,13 @@ func (s *RelayService) ChatCompletionsStream(ctx context.Context, req *model.Cha
 
 		// 调用流式 API
 		if apiConfig.Compatible {
-			s.streamWithClient(ctx, req, apiConfig, responseChan, errorChan)
+			s.streamWithClient(ctx, req, apiConfig, respChan, errorChan)
 		} else {
-			s.streamWithHTTP(ctx, req, apiConfig, responseChan, errorChan)
+			s.streamWithHTTP(ctx, req, apiConfig, respChan, errorChan)
 		}
 	}()
 
-	return responseChan, errorChan
+	return respChan, errorChan
 }
 
 // streamWithClient 使用 OpenAI 客户端进行流式调用
@@ -418,11 +418,16 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 	}
 	defer stream.Close()
 
+	// 用于收集完整响应内容以便最后计算token
+	var fullContent strings.Builder
+	var isStreamComplete bool
+
 	// 读取流式响应
 	for {
 		response, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF {
+				isStreamComplete = true
 				break
 			}
 			fmt.Printf("[LLM] Stream receive error: %v\n", err)
@@ -437,6 +442,10 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 			Created: response.Created,
 			Model:   response.Model,
 		}
+
+		// 注意：OpenAI流式响应通常不包含Usage字段
+		// 只有极少数提供商会在流式响应中提供Usage信息
+		// 这里我们移除对response.Usage的依赖
 
 		for i, choice := range response.Choices {
 			finishReason := (*string)(nil)
@@ -454,6 +463,11 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 				FinishReason: finishReason,
 			}
 			streamResp.Choices = append(streamResp.Choices, streamChoice)
+
+			// 收集内容用于最后的token估算
+			if choice.Delta.Content != "" {
+				fullContent.WriteString(choice.Delta.Content)
+			}
 		}
 
 		select {
@@ -462,6 +476,55 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 			return
 		}
 	}
+
+	// 流结束后，发送一个包含Usage估算的最终响应
+	if isStreamComplete && fullContent.Len() > 0 {
+		// 估算token使用量
+		promptTokens := s.estimatePromptTokens(req.Messages)
+		completionTokens := s.estimateCompletionTokens(fullContent.String())
+		totalTokens := promptTokens + completionTokens
+
+		// 发送包含Usage信息的最终响应
+		finalResp := &model.ChatStreamResponse{
+			ID:      "", // 空ID表示这是Usage信息
+			Object:  "chat.completion.chunk",
+			Created: time.Now().Unix(),
+			Model:   req.Model,
+			Usage: &model.Usage{
+				PromptTokens:     promptTokens,
+				CompletionTokens: completionTokens,
+				TotalTokens:      totalTokens,
+			},
+		}
+
+		select {
+		case responseChan <- finalResp:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// estimatePromptTokens 估算输入token数量
+func (s *RelayService) estimatePromptTokens(messages []model.ChatMessage) int {
+	var totalChars int
+	for _, msg := range messages {
+		// 计算角色和内容的字符数
+		totalChars += len([]rune(msg.Role + msg.Content))
+	}
+	// 粗略估算：平均每4个字符约等于1个token
+	// 对于中文，这个比例可能需要调整
+	return (totalChars + 3) / 4 // 向上取整
+}
+
+// estimateCompletionTokens 估算输出token数量
+func (s *RelayService) estimateCompletionTokens(content string) int {
+	if content == "" {
+		return 0
+	}
+	// 粗略估算：平均每4个字符约等于1个token
+	runes := []rune(content)
+	return (len(runes) + 3) / 4 // 向上取整
 }
 
 // streamWithHTTP 使用 HTTP 进行流式调用

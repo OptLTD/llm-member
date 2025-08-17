@@ -74,6 +74,7 @@ type ChatStreamResponse struct {
 	Created int64              `json:"created"`
 	Model   string             `json:"model"`
 	Choices []ChatStreamChoice `json:"choices"`
+	Usage   *Usage             `json:"usage,omitempty"` // 添加Usage字段
 }
 
 // ChatStreamChoice 流式聊天选择结构

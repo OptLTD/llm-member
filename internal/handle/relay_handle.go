@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"llm-member/internal/model"
 	"llm-member/internal/service"
+	"llm-member/internal/support"
 	"net/http"
 	"strings"
 	"time"
@@ -18,6 +19,9 @@ type RelayHandle struct {
 	relayService *service.RelayService
 	setupService *service.SetupService
 }
+
+// 定义callback函数类型
+type FinishCallback func(err error, response *strings.Builder, usage *model.Usage)
 
 func NewRelayHandle() *RelayHandle {
 	return &RelayHandle{
@@ -53,54 +57,54 @@ func (h *RelayHandle) ChatCompletions(c *gin.Context) {
 	)
 	defer cancel()
 
+	// 创建通用的日志记录callback
+	finishCallback := func(err error, resp *strings.Builder, usage *model.Usage) {
+		messagesJSON, _ := json.Marshal(req.Messages)
+		duration := time.Since(startTime).Milliseconds()
+		logEntry := &model.LlmLogModel{
+			UserID: userModel.ID, TheModel: req.Model,
+			Provider: h.getProviderFromModel(req.Model),
+			Messages: string(messagesJSON), Response: resp.String(),
+			TokensUsed: usage.TotalTokens, Duration: duration,
+		}
+		if err != nil {
+			logEntry.ErrorMsg = err.Error()
+		} else {
+			h.userService.UpdateUserStats(userModel.ID, usage.TotalTokens)
+		}
+		h.logService.CreateLog(logEntry)
+	}
+
 	// 检查是否为流式请求
 	if req.Stream {
-		h.handleStreamResponse(c, ctx, &req, userModel, startTime)
+		h.handleStreamResponse(c, ctx, &req, finishCallback)
 		return
 	}
 
 	// 非流式响应
-	h.handleNonStreamResponse(c, ctx, &req, userModel, startTime)
+	h.handleNonStreamResponse(c, ctx, &req, finishCallback)
 }
 
 // handleNonStreamResponse 处理非流式响应
-func (h *RelayHandle) handleNonStreamResponse(c *gin.Context, ctx context.Context, req *model.ChatRequest, userModel *model.UserModel, startTime time.Time) {
+func (h *RelayHandle) handleNonStreamResponse(c *gin.Context, ctx context.Context, req *model.ChatRequest, callback FinishCallback) {
 	response, err := h.relayService.ChatCompletions(ctx, req)
-	duration := time.Since(startTime)
+	// 准备callback所需的数据
+	var respBuilder strings.Builder
+	var respUsage *model.Usage
 
-	// 准备日志数据
-	messagesJSON, _ := json.Marshal(req.Messages)
-	responseJSON := ""
-	tokensUsed := 0
-	success := err == nil
-
-	if success {
+	if err == nil {
+		// 将响应转换为字符串用于日志记录
 		responseBytes, _ := json.Marshal(response)
-		responseJSON = string(responseBytes)
-		if response.Usage.TotalTokens > 0 {
-			tokensUsed = response.Usage.TotalTokens
-		}
+		respBuilder.WriteString(string(responseBytes))
+		respUsage = &response.Usage
 	}
 
-	// 记录日志
-	logEntry := &model.LlmLogModel{
-		UserID: userModel.ID, TheModel: req.Model,
-		Provider: h.getProviderFromModel(req.Model),
-		Messages: string(messagesJSON), Response: responseJSON,
-		TokensUsed: tokensUsed, Duration: duration.Milliseconds(),
+	// 调用callback处理日志
+	if callback != nil {
+		callback(err, &respBuilder, respUsage)
 	}
 
-	if err != nil {
-		logEntry.ErrorMsg = err.Error()
-	}
-
-	h.logService.CreateLog(logEntry)
-
-	// 更新用户统计
-	if success {
-		h.userService.UpdateUserStats(userModel.ID, tokensUsed)
-	}
-
+	// 返回响应给客户端
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -109,8 +113,7 @@ func (h *RelayHandle) handleNonStreamResponse(c *gin.Context, ctx context.Contex
 	c.JSON(http.StatusOK, response)
 }
 
-// handleStreamResponse 处理流式响应
-func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, req *model.ChatRequest, userModel *model.UserModel, startTime time.Time) {
+func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, req *model.ChatRequest, callback FinishCallback) {
 	// 设置流式响应头
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
@@ -119,36 +122,87 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 	c.Header("X-Accel-Buffering", "no")
 
 	// 获取流式响应通道
-	responseChan, errorChan := h.relayService.ChatCompletionsStream(ctx, req)
+	respChan, errorChan := h.relayService.ChatCompletionsStream(ctx, req)
 
 	// 准备日志数据
-	messagesJSON, _ := json.Marshal(req.Messages)
-	var responseContent strings.Builder
-	tokensUsed := 0
-	duration := time.Since(startTime)
 	var streamErr error
+	var response strings.Builder
+	var respUsage *model.Usage
+	// 收集流式响应选择数据用于精确token计算
+	var streamChoices []support.ChatCompletionsStreamResponseChoice
+
+	// 定义完成处理的内部函数
+	logAndFinish := func(err error) {
+		// 发送结束标记
+		c.Writer.Write([]byte("data: [DONE]\n\n"))
+		c.Writer.Flush()
+
+		// 如果没有从流中获取到usage信息，进行估算
+		if respUsage == nil && response.Len() > 0 {
+			// 使用support.CountTokenInput计算prompt tokens
+			promptTokens := support.CountTokenInput(req, req.Model)
+
+			// 如果收集了流式响应数据，使用CountTokenStreamChoices
+			var completionTokens int
+			if len(streamChoices) > 0 {
+				completionTokens = support.CountTokenStreamChoices(streamChoices, req.Model)
+			} else {
+				// fallback到文本计算
+				completionTokens = support.CountTextToken(response.String(), req.Model)
+			}
+
+			respUsage = &model.Usage{
+				PromptTokens:     promptTokens,
+				CompletionTokens: completionTokens,
+			}
+			respUsage.TotalTokens = respUsage.PromptTokens + respUsage.CompletionTokens
+		}
+
+		// 调用外部传入的callback
+		if callback != nil {
+			callback(err, &response, respUsage)
+		}
+	}
 
 	// 处理流式数据
 	for {
 		select {
-		case response, ok := <-responseChan:
-			if !ok {
-				// 流结束
-				goto logAndFinish
+		case resp, ok := <-respChan:
+			if !ok { // 流结束
+				logAndFinish(streamErr)
+				return
+			}
+
+			// 检查是否包含usage信息（通常在最后一个响应中）
+			if resp.Usage != nil {
+				respUsage = resp.Usage
+				// 如果这是只包含Usage信息的响应，不发送给客户端
+				if resp.ID == "" && len(resp.Choices) == 0 {
+					continue
+				}
+			}
+
+			// 收集流式响应选择数据用于token计算
+			for _, choice := range resp.Choices {
+				streamChoices = append(streamChoices, support.ChatCompletionsStreamResponseChoice{
+					Delta: support.StreamDelta{
+						Content:   choice.Delta.Content,
+						ToolCalls: nil, // 如果有工具调用，需要转换
+					},
+				})
 			}
 
 			// 发送数据到客户端
-			data, _ := json.Marshal(response)
+			data, _ := json.Marshal(resp)
 			c.Writer.Write([]byte("data: "))
 			c.Writer.Write(data)
 			c.Writer.Write([]byte("\n\n"))
 			c.Writer.Flush()
 
 			// 收集响应内容用于日志
-			if len(response.Choices) > 0 {
-				responseContent.WriteString(response.Choices[0].Delta.Content)
+			if len(resp.Choices) > 0 {
+				response.WriteString(resp.Choices[0].Delta.Content)
 			}
-
 		case err, ok := <-errorChan:
 			if ok && err != nil {
 				streamErr = err
@@ -165,36 +219,14 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 				c.Writer.Write([]byte("\n\n"))
 				c.Writer.Flush()
 			}
-			goto logAndFinish
-
+			logAndFinish(streamErr)
+			return
 		case <-ctx.Done():
 			streamErr = ctx.Err()
-			goto logAndFinish
+			logAndFinish(streamErr)
+			return
 		}
 	}
-
-logAndFinish:
-	// 发送结束标记
-	c.Writer.Write([]byte("data: [DONE]\n\n"))
-	c.Writer.Flush()
-
-	// 记录日志
-	duration = time.Since(startTime)
-	logEntry := &model.LlmLogModel{
-		UserID: userModel.ID, TheModel: req.Model,
-		Provider: h.getProviderFromModel(req.Model),
-		Messages: string(messagesJSON), Response: responseContent.String(),
-		TokensUsed: tokensUsed, Duration: duration.Milliseconds(),
-	}
-
-	if streamErr != nil {
-		logEntry.ErrorMsg = streamErr.Error()
-	} else {
-		// 更新用户统计
-		h.userService.UpdateUserStats(userModel.ID, tokensUsed)
-	}
-
-	h.logService.CreateLog(logEntry)
 }
 
 func (h *RelayHandle) getProviderFromModel(model string) string {
