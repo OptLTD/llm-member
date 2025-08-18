@@ -115,6 +115,7 @@ func main() {
 			adminApi.POST("/users/:id/generate", h.GenerateAPIKey)
 
 			adminApi.POST("/logs", h.GetLogs)
+			adminApi.GET("/usage", h.GetUsage)
 			adminApi.GET("/stats", h.GetStats)
 			adminApi.GET("/models", h.GetModels)
 			adminApi.POST("/users", h.GetUsers)

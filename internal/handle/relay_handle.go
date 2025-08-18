@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"llm-member/internal/support"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -20,7 +22,7 @@ type RelayHandle struct {
 }
 
 // 定义callback函数类型
-type FinishCallback func(err error, response *strings.Builder, usage *model.Usage)
+type FinishCallback func(err error, response *model.ChatResponse)
 
 func NewRelayHandle() *RelayHandle {
 	return &RelayHandle{
@@ -57,19 +59,22 @@ func (h *RelayHandle) ChatCompletions(c *gin.Context) {
 	defer cancel()
 
 	// 创建通用的日志记录callback
-	finishCallback := func(err error, resp *strings.Builder, usage *model.Usage) {
-		messagesJSON, _ := json.Marshal(req.Messages)
+	finishCallback := func(err error, resp *model.ChatResponse) {
+		// reqJson, _ := json.Marshal(req.Messages)
+		// tokenJson, _ := json.Marshal(resp.Usage)
+		// resString := resp.Choices[0].Message.Content
 		duration := time.Since(startTime).Milliseconds()
+		provider := h.getProviderFromModel(req.Model)
 		logEntry := &model.LlmLogModel{
-			UserID: userModel.ID, TheModel: req.Model,
-			Provider: h.getProviderFromModel(req.Model),
-			Messages: string(messagesJSON), Response: resp.String(),
-			TokensUsed: usage.TotalTokens, Duration: duration,
+			MsgID: resp.ID, UserID: userModel.ID,
+			Provider: provider, TheModel: req.Model,
+			Messages: req.Messages, Response: resp,
+			AllUsage: resp.Usage, Duration: duration,
 		}
 		if err != nil {
 			logEntry.ErrorMsg = err.Error()
 		} else {
-			h.userService.UpdateUserStats(userModel.ID, usage.TotalTokens)
+			h.userService.UpdateUserStats(userModel.ID, resp.Usage.TotalTokens)
 		}
 		h.logService.CreateLog(logEntry)
 	}
@@ -87,20 +92,9 @@ func (h *RelayHandle) ChatCompletions(c *gin.Context) {
 // handleNonStreamResponse 处理非流式响应
 func (h *RelayHandle) handleNonStreamResponse(c *gin.Context, ctx context.Context, req *model.ChatRequest, callback FinishCallback) {
 	response, err := h.relayService.ChatCompletions(ctx, req)
-	// 准备callback所需的数据
-	var respBuilder strings.Builder
-	var respUsage *model.Usage
-
-	if err == nil {
-		// 将响应转换为字符串用于日志记录
-		responseBytes, _ := json.Marshal(response)
-		respBuilder.WriteString(string(responseBytes))
-		respUsage = &response.Usage
-	}
-
 	// 调用callback处理日志
 	if callback != nil {
-		callback(err, &respBuilder, respUsage)
+		callback(err, response)
 	}
 
 	// 返回响应给客户端
@@ -125,8 +119,11 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 
 	// 准备日志数据
 	var streamErr error
-	var response strings.Builder
-	var tokenUsage *model.Usage
+	var accumulatedContent strings.Builder
+	var response = &model.ChatResponse{
+		Object: "chat.completion", Usage: model.Usage{},
+		Model: req.Model, Choices: []model.ChatChoice{},
+	}
 
 	// 定义完成处理的内部函数
 	logAndFinish := func(err error) {
@@ -136,7 +133,26 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 
 		// 调用外部传入的callback
 		if callback != nil {
-			callback(err, &response, tokenUsage)
+			response.Choices = append(response.Choices, model.ChatChoice{
+				Index: 0, FinishReason: "stop",
+				Message: model.ChatMessage{
+					Role: "assistant", Content: accumulatedContent.String(),
+				},
+			})
+
+			// 计算prompt tokens
+			promptTokens, _ := support.CountMsgsToken(
+				req.Messages, req.Model, true,
+			)
+			completionTokens := support.CountTextToken(
+				accumulatedContent.String(), req.Model,
+			)
+			response.Usage = model.Usage{
+				PromptTokens:     promptTokens,
+				CompletionTokens: completionTokens,
+				TotalTokens:      promptTokens + completionTokens,
+			}
+			callback(err, response)
 		}
 	}
 
@@ -149,12 +165,16 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 				return
 			}
 
-			// 检查是否包含usage信息（通常在最后一个响应中）
-			if resp != nil && resp.Usage != nil {
-				tokenUsage = resp.Usage
-				// 如果这是只包含Usage信息的响应，不发送给客户端
-				if resp.ID == "" && len(resp.Choices) == 0 {
-					continue
+			// 累积响应数据
+			if response.ID == "" {
+				response.ID = resp.ID
+				response.Created = resp.Created
+			}
+
+			// 累积内容
+			for _, choice := range resp.Choices {
+				if choice.Delta.Content != "" {
+					accumulatedContent.WriteString(choice.Delta.Content)
 				}
 			}
 
@@ -164,11 +184,6 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 			c.Writer.Write(data)
 			c.Writer.Write([]byte("\n\n"))
 			c.Writer.Flush()
-
-			// 收集响应内容用于日志
-			if len(resp.Choices) > 0 {
-				response.WriteString(resp.Choices[0].Delta.Content)
-			}
 		case err, ok := <-errorChan:
 			if ok && err != nil {
 				streamErr = err

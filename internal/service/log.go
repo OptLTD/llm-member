@@ -68,3 +68,12 @@ func (s *LogService) GetLogs(req *model.PaginateRequest) (*model.PaginateRespons
 func (s *LogService) DeleteLog(id uint) error {
 	return s.db.Delete(&model.LlmLogModel{}, id).Error
 }
+
+// QueryUsage 查询消息的使用详情
+func (s *LogService) QueryUsage(msgId string) (*model.LlmLogModel, error) {
+	var log model.LlmLogModel
+	if err := s.db.Where("msg_id = ?", msgId).First(&log).Error; err != nil {
+		return nil, err
+	}
+	return &log, nil
+}

@@ -13,7 +13,6 @@ import (
 
 	"llm-member/internal/config"
 	"llm-member/internal/model"
-	"llm-member/internal/support"
 
 	"github.com/google/uuid"
 	"github.com/sashabaranov/go-openai"
@@ -419,16 +418,11 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 	}
 	defer stream.Close()
 
-	// 用于收集完整响应内容以便最后计算token
-	var fullContent strings.Builder
-	var isStreamComplete bool
-
 	// 读取流式响应
 	for {
 		response, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF {
-				isStreamComplete = true
 				break
 			}
 			fmt.Printf("[LLM] Stream receive error: %v\n", err)
@@ -443,10 +437,6 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 			Created: response.Created,
 			Model:   response.Model,
 		}
-
-		// 注意：OpenAI流式响应通常不包含Usage字段
-		// 只有极少数提供商会在流式响应中提供Usage信息
-		// 这里我们移除对response.Usage的依赖
 
 		for i, choice := range response.Choices {
 			finishReason := (*string)(nil)
@@ -463,51 +453,10 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 				},
 			}
 			streamResp.Choices = append(streamResp.Choices, streamChoice)
-
-			// 收集内容用于最后的token估算
-			if choice.Delta.Content != "" {
-				fullContent.WriteString(choice.Delta.Content)
-			}
 		}
 
 		select {
 		case responseChan <- streamResp:
-		case <-ctx.Done():
-			return
-		}
-	}
-
-	// 流结束后，发送一个包含Usage估算的最终响应
-	if isStreamComplete && fullContent.Len() > 0 {
-		// 估算token使用量
-		// 转换消息格式为support.Message
-		var supportMessages []support.Message
-		for _, msg := range req.Messages {
-			supportMessages = append(supportMessages, support.Message{
-				Role: msg.Role, Content: msg.Content,
-			})
-		}
-
-		// 使用support.counter的方法计算token
-		relayInfo := &support.RelayInfo{}
-		promptTokens, _ := support.CountTokenMessages(relayInfo, supportMessages, req.Model, true)
-		completionTokens := support.CountTextToken(fullContent.String(), req.Model)
-		totalTokens := promptTokens + completionTokens
-
-		// 发送包含Usage信息的最终响应
-		finalResp := &model.ChatStreamResponse{
-			Model: req.Model, ID: "", // 空ID表示这是Usage信息
-			Object:  "chat.completion.chunk",
-			Created: time.Now().Unix(),
-			Usage: &model.Usage{
-				PromptTokens:     promptTokens,
-				CompletionTokens: completionTokens,
-				TotalTokens:      totalTokens,
-			},
-		}
-
-		select {
-		case responseChan <- finalResp:
 		case <-ctx.Done():
 			return
 		}

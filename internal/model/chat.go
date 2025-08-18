@@ -6,17 +6,20 @@ import "gorm.io/gorm"
 type LlmLogModel struct {
 	ID uint64 `json:"id" gorm:"primarykey"`
 
-	UserID     uint64 `json:"user_id" gorm:"index"`
-	TheModel   string `json:"model" gorm:"not null"`
-	Provider   string `json:"provider" gorm:"not null"`
-	Messages   string `json:"messages" gorm:"type:text"`
-	Response   string `json:"response" gorm:"type:text"`
-	TokensUsed int    `json:"tokens_used"`
-	Duration   int64  `json:"duration"` // 毫秒
-	Status     string `json:"status"`   // success, error
-	ErrorMsg   string `json:"error_msg"`
-	ClientIP   string `json:"client_ip"`
-	UserAgent  string `json:"user_agent"`
+	UserID   uint64 `json:"user_id" gorm:"index;not null;default:0"`
+	MsgID    string `json:"msg_id" gorm:"type:varchar(64);index"`
+	TheModel string `json:"model" gorm:"type:varchar(64);not null"`
+	Provider string `json:"provider" gorm:"type:varchar(64);not null"`
+
+	Messages any `json:"messages" gorm:"type:text;serializer:json"`
+	Response any `json:"response" gorm:"type:text;serializer:json"`
+	AllUsage any `json:"all_usage" gorm:"type:text;serializer:json"`
+
+	Duration  int64  `json:"duration"` // 毫秒
+	Status    string `json:"status"`   // success, error
+	ErrorMsg  string `json:"error_msg"`
+	ClientIP  string `json:"client_ip"`
+	UserAgent string `json:"user_agent"`
 
 	User UserModel `json:"user" gorm:"foreignKey:UserID"`
 
@@ -82,6 +85,7 @@ type ChatStreamChoice struct {
 	Index        int             `json:"index"`
 	Delta        ChatStreamDelta `json:"delta"`
 	FinishReason *string         `json:"finish_reason"`
+	ToolCalls    []any           `json:"tool_calls,omitempty"`
 }
 
 // ChatStreamDelta 流式聊天增量结构

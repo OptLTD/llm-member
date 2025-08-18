@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"llm-member/internal/model"
 	"log"
 	"strings"
 	"sync"
@@ -13,14 +14,8 @@ import (
 	"github.com/tiktoken-go/tokenizer/codec"
 )
 
-// RelayInfo 中继信息结构
-type RelayInfo struct {
-	ChannelType       int
-	IsFirstRequest    bool
-	InputAudioFormat  string
-	OutputAudioFormat string
-	RealtimeTools     []string
-}
+type Message = model.ChatMessage
+type ClaudeMessage = model.ChatMessage
 
 // GeneralOpenAIRequest OpenAI请求结构
 type GeneralOpenAIRequest struct {
@@ -37,19 +32,6 @@ type ClaudeRequest struct {
 	Stream   bool            `json:"stream,omitempty"`
 	System   string          `json:"system,omitempty"`
 	Tools    interface{}     `json:"tools,omitempty"`
-}
-
-// ClaudeMessage Claude消息结构
-type ClaudeMessage struct {
-	Role    string      `json:"role"`
-	Content interface{} `json:"content"`
-}
-
-// Message 消息结构
-type Message struct {
-	Role    string      `json:"role"`
-	Content interface{} `json:"content"`
-	Name    *string     `json:"name,omitempty"`
 }
 
 // Tool 工具结构
@@ -183,9 +165,9 @@ func getTokenNum(tokenEncoder tokenizer.Codec, text string) int {
 	return tkm
 }
 
-func CountTokenChatRequest(info *RelayInfo, request GeneralOpenAIRequest) (int, error) {
+func CountTokenChatRequest(request GeneralOpenAIRequest) (int, error) {
 	tkm := 0
-	msgTokens, err := CountTokenMessages(info, request.Messages, request.Model, request.Stream)
+	msgTokens, err := CountMsgsToken(request.Messages, request.Model, request.Stream)
 	if err != nil {
 		return 0, err
 	}
@@ -248,13 +230,7 @@ func CountTokenClaudeMessages(messages []ClaudeMessage, model string, stream boo
 	for _, message := range messages {
 		// Count tokens for role
 		tokenNum += getTokenNum(tokenEncoder, message.Role)
-		if content, ok := message.Content.(string); ok {
-			tokenNum += getTokenNum(tokenEncoder, content)
-		} else {
-			// 复杂内容简化处理
-			contentJSON, _ := json.Marshal(message.Content)
-			tokenNum += getTokenNum(tokenEncoder, string(contentJSON))
-		}
+		tokenNum += getTokenNum(tokenEncoder, message.Content)
 	}
 
 	// Add a constant for message formatting
@@ -284,51 +260,7 @@ func CountTokenClaudeTools(tools []Tool, model string) (int, error) {
 	return tokenNum, nil
 }
 
-func CountTokenRealtime(info *RelayInfo, request RealtimeEvent, model string) (int, int, error) {
-	audioToken := 0
-	textToken := 0
-	switch request.Type {
-	case RealtimeEventTypeSessionUpdate:
-		if request.Session != nil {
-			msgTokens := CountTextToken(request.Session.Instructions, model)
-			textToken += msgTokens
-		}
-	case RealtimeEventResponseAudioDelta:
-		// 简化音频token计算
-		audioToken += len(request.Delta) / 100 // 简单估算
-	case RealtimeEventResponseAudioTranscriptionDelta, RealtimeEventResponseFunctionCallArgumentsDelta:
-		// count text token
-		tkm := CountTextToken(request.Delta, model)
-		textToken += tkm
-	case RealtimeEventInputAudioBufferAppend:
-		// 简化音频token计算
-		audioToken += len(request.Audio) / 100 // 简单估算
-	case RealtimeEventConversationItemCreated:
-		if request.Item != nil {
-			switch request.Item.Type {
-			case "message":
-				for _, content := range request.Item.Content {
-					if content.Type == "input_text" {
-						tokens := CountTextToken(content.Text, model)
-						textToken += tokens
-					}
-				}
-			}
-		}
-	case RealtimeEventTypeResponseDone:
-		// count tools token
-		if !info.IsFirstRequest && len(info.RealtimeTools) > 0 {
-			for _, tool := range info.RealtimeTools {
-				toolTokens := CountTokenInput(tool, model)
-				textToken += 8
-				textToken += toolTokens
-			}
-		}
-	}
-	return textToken, audioToken, nil
-}
-
-func CountTokenMessages(info *RelayInfo, messages []Message, model string, stream bool) (int, error) {
+func CountMsgsToken(messages []Message, model string, stream bool) (int, error) {
 	tokenEncoder := getTokenEncoder(model)
 	// Reference:
 	// https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb
@@ -336,32 +268,16 @@ func CountTokenMessages(info *RelayInfo, messages []Message, model string, strea
 	//
 	// Every message follows <|start|>{role/name}\n{content}<|end|>\n
 	var tokensPerMessage int
-	var tokensPerName int
 	if model == "gpt-3.5-turbo-0301" {
 		tokensPerMessage = 4
-		tokensPerName = -1 // If there's a name, the role is omitted
 	} else {
 		tokensPerMessage = 3
-		tokensPerName = 1
 	}
 	tokenNum := 0
 	for _, message := range messages {
 		tokenNum += tokensPerMessage
 		tokenNum += getTokenNum(tokenEncoder, message.Role)
-		if message.Content != nil {
-			if message.Name != nil {
-				tokenNum += tokensPerName
-				tokenNum += getTokenNum(tokenEncoder, *message.Name)
-			}
-			// 简化内容处理
-			if content, ok := message.Content.(string); ok {
-				tokenNum += getTokenNum(tokenEncoder, content)
-			} else {
-				// 复杂内容简化处理
-				contentJSON, _ := json.Marshal(message.Content)
-				tokenNum += getTokenNum(tokenEncoder, string(contentJSON))
-			}
-		}
+		tokenNum += getTokenNum(tokenEncoder, message.Content)
 	}
 	tokenNum += 3 // Every reply is primed with <|start|>assistant<|message|>
 	return tokenNum, nil

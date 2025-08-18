@@ -125,20 +125,6 @@ class LLMMemberApp {
       });
     });
 
-    // 聊天测试
-    document.getElementById("sendMessage").addEventListener("click", () => {
-      this.sendChatMessage();
-    });
-
-    // 回车发送消息
-    document
-      .getElementById("messageInput")
-      .addEventListener("keypress", (e) => {
-        if (e.key === "Enter" && e.ctrlKey) {
-          this.sendChatMessage();
-        }
-      });
-
     // 模型筛选按钮
     document.addEventListener("click", (e) => {
       if (e.target.classList.contains("provider-filter-btn")) {

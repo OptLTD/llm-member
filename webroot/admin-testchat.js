@@ -218,10 +218,6 @@ class TestChatManager {
       </div>
     `;
 
-    const streamContentDiv = document.getElementById("streamContent");
-    let fullContent = "";
-    let tokenCount = 0;
-
     try {
       // 获取认证token
       const apiKey = localStorage.getItem("apiKey");
@@ -253,6 +249,10 @@ class TestChatManager {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
+      let fullContent = "";
+      let streamMsgId = "";
+      const streamContentDiv = document.getElementById("streamContent");
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -265,7 +265,16 @@ class TestChatManager {
             const data = line.slice(6);
             if (data === "[DONE]") {
               const duration = Date.now() - startTime;
-              this.updateStreamStats(model, duration, tokenCount, "stop");
+              this.updateStreamStats(model, duration, 0, "stop");
+              setTimeout(async() => {
+                try {
+                  const url = `/api/admin/usage?msgId=${streamMsgId}`
+                  const usage = await this.app.apiCall(url, {});
+                  this.updateStreamStats(model, duration, usage.total_tokens, "stop");
+                } catch (err) {
+                  console.error('loadStreamChatUsage error', err);
+                }
+              }, 150)
               return;
             }
 
@@ -280,13 +289,9 @@ class TestChatManager {
                 if (delta.content) {
                   fullContent += delta.content;
                   streamContentDiv.textContent = fullContent;
-                  tokenCount++;
-                  document.getElementById("tokenCount").textContent =
-                    tokenCount;
                 }
-                if (parsed.choices[0].finish_reason) {
-                  document.getElementById("finishReason").textContent =
-                    parsed.choices[0].finish_reason;
+                if (parsed.id) {
+                  streamMsgId = parsed.id;
                 }
               }
             } catch (e) {
@@ -297,7 +302,7 @@ class TestChatManager {
       }
 
       const duration = Date.now() - startTime;
-      this.updateStreamStats(model, duration, tokenCount, "stop");
+      this.updateStreamStats(model, duration, 0, "stop");
     } catch (error) {
       this.showChatError("流式请求错误：" + error.message);
     }

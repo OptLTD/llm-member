@@ -227,3 +227,20 @@ func (h *AdminHandle) GetOrders(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+func (h *AdminHandle) GetUsage(c *gin.Context) {
+	// 从url 中取 msgId
+	msgId := c.Query("msgId")
+	if msgId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "msgId is required"})
+		return
+	}
+
+	// 调用服务层方法
+	response, err := h.logService.QueryUsage(msgId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, response.AllUsage)
+}
