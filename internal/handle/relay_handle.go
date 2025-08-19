@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"llm-member/internal/support"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,10 +17,9 @@ type RelayHandle struct {
 	userService  *service.UserService
 	relayService *service.RelayService
 	setupService *service.SetupService
+	tokenService *service.TokenService
+	statsService *service.StatsService
 }
-
-// 定义callback函数类型
-type FinishCallback func(err error, response *model.ChatResponse)
 
 func NewRelayHandle() *RelayHandle {
 	return &RelayHandle{
@@ -30,10 +27,14 @@ func NewRelayHandle() *RelayHandle {
 		userService:  service.NewUserService(),
 		relayService: service.NewRelayService(),
 		setupService: service.NewSetupService(),
+		tokenService: service.NewTokenService(),
+		statsService: service.NewStatsService(),
 	}
 }
 
-// ChatCompletions 聊天完成处理
+// 定义callback函数类型
+type FinishCallback func(err error, response *model.ChatResponse)
+
 func (h *RelayHandle) ChatCompletions(c *gin.Context) {
 	var req model.ChatRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -42,50 +43,57 @@ func (h *RelayHandle) ChatCompletions(c *gin.Context) {
 	}
 
 	// 获取用户信息
-	user, exists := c.Get("user")
-	if !exists {
+	var startTime = time.Now()
+	var userInfo *model.UserModel
+	if user, exists := c.Get("user"); !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "未找到用户信息"})
 		return
+	} else {
+		userInfo = user.(*model.UserModel)
 	}
 
-	userModel := user.(*model.UserModel)
-	startTime := time.Now()
+	if err := h.tokenService.CheckUsage(userInfo); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 
 	// 调用 LLM 服务
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
-		60*time.Second,
+		180*time.Second,
 	)
 	defer cancel()
 
-	// 创建通用的日志记录callback
+	// 创建通用的日志记录
 	finishCallback := func(err error, resp *model.ChatResponse) {
-		// reqJson, _ := json.Marshal(req.Messages)
-		// tokenJson, _ := json.Marshal(resp.Usage)
-		// resString := resp.Choices[0].Message.Content
 		duration := time.Since(startTime).Milliseconds()
 		provider := h.getProviderFromModel(req.Model)
 		logEntry := &model.LlmLogModel{
-			MsgID: resp.ID, UserID: userModel.ID,
+			ChatID: resp.ID, UserID: userInfo.ID,
 			Provider: provider, TheModel: req.Model,
 			Messages: req.Messages, Response: resp,
 			AllUsage: resp.Usage, Duration: duration,
+			ReqTime: time.Now(), ClientIP: c.ClientIP(),
+			UserAgent: c.GetHeader("user-agent"),
+		}
+		if c.GetHeader("X-Project-Id") != "" {
+			logEntry.ProjID = c.GetHeader("X-Project-Id")
 		}
 		if err != nil {
+			logEntry.Status = "failure"
 			logEntry.ErrorMsg = err.Error()
 		} else {
-			h.userService.UpdateUserStats(userModel.ID, resp.Usage.TotalTokens)
+			logEntry.Status = "success"
 		}
-		h.logService.CreateLog(logEntry)
+		if err := h.logService.CreateLog(logEntry); err == nil {
+			h.statsService.UpdateUserStats(userInfo)
+		}
 	}
 
-	// 检查是否为流式请求
 	if req.Stream {
 		h.handleStreamResponse(c, ctx, &req, finishCallback)
 		return
 	}
-
-	// 非流式响应
 	h.handleNonStreamResponse(c, ctx, &req, finishCallback)
 }
 
@@ -94,7 +102,7 @@ func (h *RelayHandle) handleNonStreamResponse(c *gin.Context, ctx context.Contex
 	response, err := h.relayService.ChatCompletions(ctx, req)
 	// 调用callback处理日志
 	if callback != nil {
-		callback(err, response)
+		go callback(err, response)
 	}
 
 	// 返回响应给客户端
@@ -141,10 +149,10 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 			})
 
 			// 计算prompt tokens
-			promptTokens, _ := support.CountMsgsToken(
+			promptTokens, _ := h.tokenService.CountMsgsToken(
 				req.Messages, req.Model, true,
 			)
-			completionTokens := support.CountTextToken(
+			completionTokens := h.tokenService.CountTextToken(
 				accumulatedContent.String(), req.Model,
 			)
 			response.Usage = model.Usage{
@@ -152,7 +160,7 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 				CompletionTokens: completionTokens,
 				TotalTokens:      promptTokens + completionTokens,
 			}
-			callback(err, response)
+			go callback(err, response)
 		}
 	}
 

@@ -81,16 +81,12 @@ const PricingPage = {
 
     // 处理特性列表
     const features = Array.isArray(plan.features) ? plan.features : [];
-    const featuresList = features
-      .map(
-        (feature) => `
-            <li class="flex items-center">
-                <i class="fas fa-check text-green-500 mr-3"></i>
-                <span>${feature}</span>
-            </li>
-        `
-      )
-      .join("");
+    const featuresList = features.map((feature) => `
+      <li class="flex items-center">
+        <i class="fas fa-check text-green-500 mr-3"></i>
+        <span>${feature}</span>
+      </li>
+    `).join("");
 
     // 价格显示
     const priceDisplay = plan.price === 0 ? "免费" : `¥${plan.price}`;
@@ -116,7 +112,7 @@ const PricingPage = {
                         }">${priceDisplay}</span>
                         <span class="text-gray-600">${priceUnit}</span>
                     </div>
-                    <p class="text-gray-600 mb-6">${plan.Desc || ""}</p>
+                    <p class="text-gray-600 mb-6">${plan.Brief || ""}</p>
                     <ul class="text-left space-y-3 mb-8">
                         ${featuresList}
                     </ul>

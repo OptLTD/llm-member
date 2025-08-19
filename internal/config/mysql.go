@@ -26,7 +26,16 @@ func GetMySQLDB(cfg *MySQLConfig) (*gorm.DB, error) {
 		"%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=True&loc=Local",
 		cfg.User, cfg.Pass, cfg.Host, cfg.Port, cfg.Name, "utf8mb4",
 	)
+	var logMode = logger.Error
+	switch getEnv("APP_MODE", "test") {
+	case "debug":
+		logMode = logger.Info
+	case "test":
+		logMode = logger.Warn
+	default:
+		logMode = logger.Error
+	}
 	return gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
+		Logger: logger.Default.LogMode(logMode),
 	})
 }

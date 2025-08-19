@@ -1,6 +1,8 @@
 package model
 
 import (
+	"database/sql/driver"
+	"encoding/json"
 	"time"
 
 	"gorm.io/gorm"
@@ -19,16 +21,18 @@ type UserModel struct {
 	UserRole Role   `json:"user_role" gorm:"default:user"`
 
 	// 当前套餐、过期时间
-	UserPlan  PayPlan    `json:"user_plan" gorm:"type:varchar(20)"` // 用户套餐
-	ExpiredAt *time.Time `json:"expired_at" gorm:"default:null"`    // 过期时间
+	ExpireAt *time.Time `json:"expire_at" gorm:"default:null"`     // 过期时间
+	UserPlan PayPlan    `json:"user_plan" gorm:"type:varchar(20)"` // 用户套餐
+	ApiUsage *ApiUsage  `json:"api_usage" gorm:"type:text;serializer:json"`
+	ApiLimit *ApiLimit  `json:"api_limit" gorm:"type:text;serializer:json"`
 
 	// 使用统计
-	TotalTokens   int64 `json:"total_tokens" gorm:"default:0"`
-	TotalRequests int64 `json:"total_requests" gorm:"default:0"`
+	// TotalTokens   int64 `json:"total_tokens" gorm:"default:0"`
+	// TotalRequests int64 `json:"total_requests" gorm:"default:0"`
 
-	// 限制设置
-	DailyLimit   int64 `json:"daily_limit" gorm:"default:1000"`    // 每日请求限制
-	MonthlyLimit int64 `json:"monthly_limit" gorm:"default:10000"` // 每月请求限制
+	// // 限制设置
+	// DailyLimit   int64 `json:"daily_limit" gorm:"default:1000"`    // 每日请求限制
+	// MonthlyLimit int64 `json:"monthly_limit" gorm:"default:10000"` // 每月请求限制
 
 	gorm.Model
 }
@@ -78,7 +82,7 @@ type UpdateUserRequest struct {
 	Phone  string `json:"phone,omitempty"`
 
 	IsActive *bool    `json:"is_active,omitempty"`
-	PayPlan  *PayPlan `json:"pay_plan,omitempty"`
+	UserPlan *PayPlan `json:"user_plan,omitempty"`
 
 	DailyLimit   *int64 `json:"daily_limit,omitempty"`
 	MonthlyLimit *int64 `json:"monthly_limit,omitempty"`
@@ -86,41 +90,35 @@ type UpdateUserRequest struct {
 
 // UserResponse 用户信息响应
 type UserResponse struct {
-	Email    string  `json:"email"`
-	APIKey   string  `json:"api_key"`
-	Username string  `json:"username"`
-	IsActive bool    `json:"is_active"`
-	Verified bool    `json:"verified"`
-	UserRole Role    `json:"user_role"`
-	UserPlan PayPlan `json:"user_plan"`
+	Email    string `json:"email"`
+	APIKey   string `json:"api_key"`
+	Username string `json:"username"`
+	IsActive bool   `json:"is_active"`
+	Verified bool   `json:"verified"`
+	UserRole Role   `json:"user_role"`
 
-	TotalTokens   int64 `json:"total_tokens"`
-	TotalRequests int64 `json:"total_requests"`
-	DailyLimit    int64 `json:"daily_limit"`
-	MonthlyLimit  int64 `json:"monthly_limit"`
+	UserPlan PayPlan    `json:"user_plan"`
+	ExpireAt *time.Time `json:"expire_at"`
+	ApiUsage *ApiUsage  `json:"api_usage"`
+	ApiLimit *ApiLimit  `json:"api_limit"`
 
-	ExpiredAt *time.Time `json:"expired_at"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // ToUserResponse 将UserModel转换为UserResponse
 func (u *UserModel) ToUserResponse() *UserResponse {
 	return &UserResponse{
-		Email:         u.Email,
-		Username:      u.Username,
-		APIKey:        u.APIKey,
-		IsActive:      u.IsActive,
-		Verified:      u.Verified,
-		UserRole:      u.UserRole,
-		UserPlan:      u.UserPlan,
-		ExpiredAt:     u.ExpiredAt,
-		TotalTokens:   u.TotalTokens,
-		TotalRequests: u.TotalRequests,
-		DailyLimit:    u.DailyLimit,
-		MonthlyLimit:  u.MonthlyLimit,
-		CreatedAt:     u.CreatedAt,
-		UpdatedAt:     u.UpdatedAt,
+		Email:     u.Email,
+		APIKey:    u.APIKey,
+		Username:  u.Username,
+		IsActive:  u.IsActive,
+		Verified:  u.Verified,
+		UserRole:  u.UserRole,
+		UserPlan:  u.UserPlan,
+		ExpireAt:  u.ExpireAt,
+		CreatedAt: u.CreatedAt,
+		UpdatedAt: u.UpdatedAt,
 	}
 }
 
@@ -153,4 +151,71 @@ type StatsResponse struct {
 	MonthlySuccessfulRevenue float64 `json:"monthlySuccessfulRevenue"`
 	WeeklyRevenue            float64 `json:"weeklyRevenue"`
 	WeeklySuccessfulRevenue  float64 `json:"weeklySuccessfulRevenue"`
+}
+
+type ApiUsage struct {
+	TotalTokens   uint64 `json:"total_tokens"`
+	TotalRequests uint64 `json:"total_requests"`
+	TotalProjects uint64 `json:"total_projects"`
+
+	TodayTokens   uint64 `json:"today_tokens"`
+	TodayRequests uint64 `json:"today_requests"`
+	TodayProjects uint64 `json:"today_projects"`
+}
+type ApiLimit struct {
+	// 有效期
+	ExpireDays int `json:"expire_days,omitempty"`
+	// CurrentPlan PayPlan `json:"current_plan,omitempty"`
+	LimitMethod string `json:"limit_method,omitempty"`
+
+	DailyTokens   uint64 `json:"daily_tokens,omitempty"`
+	MonthlyTokens uint64 `json:"monthly_tokens,omitempty"`
+
+	DailyRequests   uint64 `json:"daily_requests,omitempty"`
+	MonthlyRequests uint64 `json:"monthly_requests,omitempty"`
+
+	DailyProjects   uint64 `json:"daily_projects,omitempty"`
+	MonthlyProjects uint64 `json:"monthly_projects,omitempty"`
+}
+
+// Value implements driver.Valuer interface for ApiUsage
+func (a ApiUsage) Value() (driver.Value, error) {
+	return json.Marshal(a)
+}
+
+// Scan implements sql.Scanner interface for ApiUsage
+func (a *ApiUsage) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	switch v := value.(type) {
+	case []byte:
+		return json.Unmarshal(v, a)
+	case string:
+		return json.Unmarshal([]byte(v), a)
+	default:
+		return nil
+	}
+}
+
+// Value implements driver.Valuer interface for ApiLimit
+func (a ApiLimit) Value() (driver.Value, error) {
+	return json.Marshal(a)
+}
+
+// Scan implements sql.Scanner interface for ApiLimit
+func (a *ApiLimit) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	switch v := value.(type) {
+	case []byte:
+		return json.Unmarshal(v, a)
+	case string:
+		return json.Unmarshal([]byte(v), a)
+	default:
+		return nil
+	}
 }

@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-	"time"
 
 	"llm-member/internal/config"
 	"llm-member/internal/model"
@@ -88,16 +87,8 @@ func (s *UserService) UpdateUser(req *model.UpdateUserRequest) (*model.UserModel
 		user.IsActive = *req.IsActive
 	}
 
-	if req.PayPlan != nil {
-		user.UserPlan = *req.PayPlan
-	}
-
-	if req.DailyLimit != nil {
-		user.DailyLimit = *req.DailyLimit
-	}
-
-	if req.MonthlyLimit != nil {
-		user.MonthlyLimit = *req.MonthlyLimit
+	if req.UserPlan != nil {
+		user.UserPlan = *req.UserPlan
 	}
 
 	if err := s.db.Save(&user).Error; err != nil {
@@ -128,43 +119,6 @@ func (s *UserService) RegenerateKey(userID uint64) (*model.UserModel, error) {
 
 	user.Password = ""
 	return &user, nil
-}
-
-// UpdateUserStats 更新用户统计信息
-func (s *UserService) UpdateUserStats(userID uint64, tokensUsed int) error {
-	var data = map[string]any{
-		"total_requests": gorm.Expr("total_requests + ?", 1),
-		"total_tokens":   gorm.Expr("total_tokens + ?", tokensUsed),
-	}
-	return s.db.Model(&model.UserModel{}).Where("id = ?", userID).Updates(data).Error
-}
-
-// CheckUserLimits 检查用户限制
-func (s *UserService) CheckUserLimits(userID uint64) error {
-	var user model.UserModel
-	if err := s.db.First(&user, userID).Error; err != nil {
-		return fmt.Errorf("用户不存在")
-	}
-
-	// 检查今日请求数
-	today := time.Now().Format("2006-01-02")
-	var todayRequests int64
-	s.db.Model(&model.LlmLogModel{}).Where("user_id = ? AND DATE(created_at) = ?", userID, today).Count(&todayRequests)
-
-	if todayRequests >= user.DailyLimit {
-		return fmt.Errorf("已达到每日请求限制 (%d)", user.DailyLimit)
-	}
-
-	// 检查本月请求数
-	thisMonth := time.Now().Format("2006-01")
-	var monthlyRequests int64
-	s.db.Model(&model.LlmLogModel{}).Where("user_id = ? AND DATE_FORMAT(created_at, '%Y-%m') = ?", userID, thisMonth).Count(&monthlyRequests)
-
-	if monthlyRequests >= user.MonthlyLimit {
-		return fmt.Errorf("已达到每月请求限制 (%d)", user.MonthlyLimit)
-	}
-
-	return nil
 }
 
 // DeleteUser 删除用户（软删除）

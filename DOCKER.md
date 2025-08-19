@@ -52,7 +52,7 @@
      -p 8080:8080 \
      -v llm_storage:/app/storage \
      -e APP_PORT=8080 \
-     -e GIN_MODE=release \
+     -e APP_MODE=release \
      -e ADMIN_USERNAME=admin \
      -e ADMIN_PASSWORD=admin123 \
      -e OPENAI_API_KEY=your_openai_api_key_here \
@@ -68,7 +68,7 @@
 | 变量名 | 默认值 | 说明 |
 |--------|--------|------|
 | APP_PORT | 8080 | 应用端口 |
-| GIN_MODE | release | Gin 运行模式 |
+| APP_MODE | release | app 运行模式 |
 | ADMIN_USERNAME | admin | 管理员用户名 |
 | ADMIN_PASSWORD | admin123 | 管理员密码 |
 | OPENAI_API_KEY | - | OpenAI API 密钥 |
@@ -174,7 +174,7 @@ docker-compose logs --tail=100 llm-member
 
 生产环境部署建议：
 
-1. 使用 `GIN_MODE=release`
+1. 使用 `APP_MODE=release`
 2. 配置反向代理（Nginx/Traefik）
 3. 启用 HTTPS
 4. 设置资源限制

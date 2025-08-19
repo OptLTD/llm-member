@@ -135,7 +135,7 @@ const resp = fetch(`https://your-domain.com/v1/verify-token`, {
   "username": "User Name",
   "user_plan": "basic",
   "api_token": "sk-xxxxxxxxxxxxxxxx",
-  "expired_at": "2023-12-31T23:59:59Z"
+  "expire_at": "2023-12-31T23:59:59Z"
 }
 ```
 
@@ -179,7 +179,7 @@ const resp = fetch(`https://your-domain.com/v1/user-profile`, {
   "email": "user@example.com",
   "username": "User Name",
   "user_plan": "basic",
-  "expired_at": "2023-12-31T23:59:59Z"
+  "expire_at": "2023-12-31T23:59:59Z"
 }
 ```
 
@@ -200,7 +200,7 @@ cosnt resp = fetch(`https://your-domain.com/api/usage`, {
   "email": "user@example.com",
   "username": "User Name",
   "user_plan": "basic",
-  "expired_at": "2023-12-31T23:59:59Z"
+  "expire_at": "2023-12-31T23:59:59Z"
 }
 ```
 

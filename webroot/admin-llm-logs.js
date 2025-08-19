@@ -174,7 +174,7 @@ class LlmLogsManager {
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">模型</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">提供商</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Token</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usage</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">耗时</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
@@ -184,7 +184,7 @@ class LlmLogsManager {
             ${logs.map(log => `
               <tr class="hover:bg-gray-50">
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  ${this.formatDateTime(log.created_at)}
+                  ${this.formatDateTime(log.req_time)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   ${this.app.escapeHtml(log.model || '')}
@@ -196,7 +196,9 @@ class LlmLogsManager {
                   ${this.getLogStatusBadge(log.status)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  ${log.tokens_used || 0}
+                  ${log.all_usage?.prompt_tokens || 0} +
+                  ${log.all_usage?.completion_tokens || 0} =
+                  ${log.all_usage?.total_tokens || 0}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   ${log.duration || 0}ms
@@ -205,12 +207,12 @@ class LlmLogsManager {
                   ${this.app.escapeHtml(log.client_ip || '')}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <button onclick="app.logsManager.viewLogDetails(${log.id})" 
+                  <button onclick="app.llmLogsManager.viewLogDetails(${log.id})" 
                     class="text-blue-600 hover:text-blue-900 mr-3">
                     <i class="fas fa-eye"></i> 详情
                   </button>
                   ${log.error_msg ? `
-                    <button onclick="app.logsManager.viewLogError(${log.id})" 
+                    <button onclick="app.llmLogsManager.viewLogError(${log.id})" 
                       class="text-red-600 hover:text-red-900">
                       <i class="fas fa-exclamation-triangle"></i> 错误
                     </button>

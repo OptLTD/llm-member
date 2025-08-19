@@ -1,25 +1,33 @@
 package model
 
-import "gorm.io/gorm"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 // LlmLogModel 聊天日志模型
 type LlmLogModel struct {
 	ID uint64 `json:"id" gorm:"primarykey"`
 
-	UserID   uint64 `json:"user_id" gorm:"index;not null;default:0"`
-	MsgID    string `json:"msg_id" gorm:"type:varchar(64);index"`
-	TheModel string `json:"model" gorm:"type:varchar(64);not null"`
-	Provider string `json:"provider" gorm:"type:varchar(64);not null"`
+	UserID   uint64 `json:"user_id" gorm:"column:user_id;index;not null;default:0"`
+	ChatID   string `json:"chat_id" gorm:"column:chat_id;type:varchar(64);index"`
+	ProjID   string `json:"proj_id" gorm:"column:proj_id;type:varchar(64);index;"`
+	TheModel string `json:"model" gorm:"column:model;type:varchar(64);not null"`
+	Provider string `json:"provider" gorm:"column:provider;type:varchar(64);not null"`
 
 	Messages any `json:"messages" gorm:"type:text;serializer:json"`
 	Response any `json:"response" gorm:"type:text;serializer:json"`
 	AllUsage any `json:"all_usage" gorm:"type:text;serializer:json"`
 
-	Duration  int64  `json:"duration"` // 毫秒
-	Status    string `json:"status"`   // success, error
-	ErrorMsg  string `json:"error_msg"`
-	ClientIP  string `json:"client_ip"`
-	UserAgent string `json:"user_agent"`
+	Duration  int64  `json:"duration" gorm:"not null;default:0"`
+	Status    string `json:"status" gorm:"type:varchar(10);"`
+	ErrorMsg  string `json:"error_msg" gorm:"type:varchar(256);"`
+	ClientIP  string `json:"client_ip" gorm:"type:varchar(64);"`
+	UserAgent string `json:"user_agent" gorm:"type:varchar(256);not null"`
+
+	// 添加请求时间字段，用于按月分区查询
+	ReqTime time.Time `json:"req_time" gorm:"column:req_time;index;"`
 
 	User UserModel `json:"user" gorm:"foreignKey:UserID"`
 

@@ -101,7 +101,7 @@ func (s *OrderService) UpdateStatus(orderID string, status string) error {
 }
 
 // ProcessPaymentSuccess 处理支付成功
-func (s *OrderService) PaySuccess(orderId string) error {
+func (s *OrderService) PaySuccess(orderId string, limit *model.ApiLimit) error {
 	order, err := s.QueryOrder(orderId)
 	if err != nil {
 		return fmt.Errorf("查询订单失败: %v", err)
@@ -129,8 +129,8 @@ func (s *OrderService) PaySuccess(orderId string) error {
 
 	// 更新用户套餐
 	var updateUser = map[string]any{
-		"user_plan":  order.PayPlan,
-		"expired_at": time.Now().AddDate(0, 0, 30),
+		"user_plan": order.PayPlan, "api_limit": limit,
+		"expire_at": time.Now().AddDate(0, 0, limit.ExpireDays),
 	}
 	var query = tx.Model(&model.UserModel{}).Where("id = ?", order.UserID)
 	if err := query.Updates(updateUser).Error; err != nil {

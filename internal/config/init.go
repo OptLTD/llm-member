@@ -16,7 +16,7 @@ type Config struct {
 	AppName string
 	AppDesc string
 	AppHost string
-	GinMode string
+	AppMode string
 	Storage string
 
 	Admin *AdminInfo
@@ -35,7 +35,7 @@ type AdminInfo struct {
 
 func Load() *Config {
 	cfg := &Config{
-		GinMode: getEnv("GIN_MODE", "test"),
+		AppMode: getEnv("APP_MODE", "test"),
 		AppPort: getEnv("APP_PORT", "8080"),
 		AppName: getEnv("APP_NAME", "Demo"),
 		AppDesc: getEnv("APP_DESC", "Desc"),
@@ -50,16 +50,18 @@ func Load() *Config {
 			Pass: getEnv("MYSQL_PASS", ""),
 			Name: getEnv("MYSQL_NAME", ""),
 		},
-		Redis: &RedisConfig{
-			Host: getEnv("REDIS_HOST", "localhost"),
-			Port: getEnv("REDIS_PORT", "6379"),
-			Pass: getEnv("REDIS_PASS", ""),
-			DB:   getEnv("REDIS_DB", "0"),
-		},
 		Admin: &AdminInfo{
 			Username: getEnv("ADMIN_USERNAME", ""),
 			Password: getEnv("ADMIN_PASSWORD", ""),
 		},
+	}
+	if getEnv("REDIS_HOST", "") != "" {
+		cfg.Redis = &RedisConfig{
+			Host: getEnv("REDIS_HOST", "localhost"),
+			Port: getEnv("REDIS_PORT", "6379"),
+			Pass: getEnv("REDIS_PASS", ""),
+			DB:   getEnv("REDIS_DB", "0"),
+		}
 	}
 	return cfg
 }
@@ -91,7 +93,7 @@ func GetRedis() *redis.Client {
 
 // InitRedis 初始化Redis连接
 func InitRedis(cfg *RedisConfig) error {
-	if cfg.Host == "" || cfg.Port == "" || cfg.DB == "" {
+	if cfg == nil || cfg.Host == "" || cfg.Port == "" {
 		return fmt.Errorf("redis config is incomplete")
 	}
 	client, err := GetRedisClient(cfg)

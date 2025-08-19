@@ -38,8 +38,8 @@ cp .env.example .env
 参考配置示例：
 ```bash
 # 服务器配置
-PORT=8080
-GIN_MODE=debug
+APP_PORT=8080
+APP_MODE=debug
 DATA_PATH=/data
 
 # 管理员配置

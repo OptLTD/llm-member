@@ -3,6 +3,7 @@
 class PaymentManager {
   constructor() {
     this.plans = []
+    this.keyOfUsage = 'usage'
     this.selectedPlan = null;
     this.selectedPaymentMethod = null;
     this.customAmount = 0;
@@ -141,12 +142,7 @@ class PaymentManager {
                                 : ""
                             }
                         </div>
-                        <p class="text-gray-600 text-sm mt-1">${plan.desc}</p>
-                        <!-- <div class="mt-2">
-                            <span class="text-sm text-gray-500">包含：${
-                              plan.tokens
-                            }</span>
-                        </div> -->
+                        <p class="text-gray-600 text-sm mt-1">${plan.brief}</p>
                         <ul class="mt-2 text-sm text-gray-600">
                             ${plan.features
                               .map(
@@ -159,13 +155,11 @@ class PaymentManager {
                     <div class="ml-4 text-right">
                         <div class="text-2xl font-bold text-blue-600">
                             ${
-                              plan.plan === "usage"
-                                ? "自定义金额"
-                                : `¥${plan.price}`
+                              plan.plan === this.keyOfUsage
+                                ? "自定义金额" : `¥${plan.price}`
                             }
                         </div>
-                        ${
-                          plan.plan !== "usage"
+                        ${ plan.plan !== this.keyOfUsage
                             ? '<div class="text-sm text-gray-500">/月</div>'
                             : ""
                         }
@@ -246,7 +240,7 @@ class PaymentManager {
     planCard.classList.add("selected");
 
     this.selectedPlan = plan;
-    if (plan.plan === "basic") {
+    if (plan.plan === this.keyOfUsage) {
       // 获取基础版卡片内的金额输入框的值
       const basicAmountInput = document.querySelector("#basicAmount");
       basicAmountInput.value = plan.price;
@@ -285,7 +279,7 @@ class PaymentManager {
     if (this.selectedPlan) {
       selectedPlanName.textContent = this.selectedPlan.name;
 
-      if (this.selectedPlan.plan === "basic") {
+      if (this.selectedPlan.plan === this.keyOfUsage) {
         // usage方案：显示输入框，隐藏固定金额
         selectedAmount.classList.add("hidden");
         basicAmountContainer.classList.remove("hidden");
@@ -310,10 +304,8 @@ class PaymentManager {
 
   updatePayButton() {
     const payBtn = document.getElementById("payBtn");
-    const canPay =
-      this.selectedPlan &&
-      this.selectedPaymentMethod &&
-      (this.selectedPlan.plan !== "basic" || this.customAmount > 0);
+    const hasNum = (this.selectedPlan.plan !== this.keyOfUsage || this.customAmount > 0)
+    const canPay = this.selectedPlan && this.selectedPaymentMethod && hasNum;
 
     payBtn.disabled = !canPay;
 
@@ -361,7 +353,7 @@ class PaymentManager {
       return;
     }
 
-    if (this.selectedPlan.plan === "basic" && this.customAmount < 10) {
+    if (this.selectedPlan.plan === this.keyOfUsage && this.customAmount < 10) {
       alert("充值金额不能少于10元");
       return;
     }
@@ -376,7 +368,7 @@ class PaymentManager {
         method: this.selectedPaymentMethod.method,
       };
 
-      if (this.selectedPlan.plan === "basic") {
+      if (this.selectedPlan.plan === this.keyOfUsage) {
         paymentData.amount = this.customAmount;
       }
 
@@ -391,7 +383,7 @@ class PaymentManager {
         this.showPaymentQR(qrcode);
         this.startPaymentCheck(data);
       } else if (data.error && data.plan) {
-        this.showHasActivePlan(data.plan, data.expired_at);
+        this.showHasActivePlan(data.plan, data.expire_at);
       } else {
         this.showPaymentError(data.error || "创建支付订单失败");
       }
@@ -405,8 +397,7 @@ class PaymentManager {
     try {
       const token = AppState.token;
       const response = await fetch(url, {
-        method: "POST",
-        headers: {
+        method: "POST", headers: {
           Authorization: `Bearer ${token}`,
         },
       });
@@ -463,7 +454,7 @@ class PaymentManager {
     this.stopPaymentCheck();
   }
 
-  showHasActivePlan(name, expired_at) {
+  showHasActivePlan(name, expire_at) {
     // 隐藏其他支付相关元素
     document.getElementById("paymentLoading").classList.add("hidden");
     document.getElementById("paymentQR").classList.add("hidden");
@@ -471,7 +462,7 @@ class PaymentManager {
     document.getElementById("paymentError").classList.add("hidden");
 
     // 格式化过期时间
-    const expireDate = new Date(expired_at);
+    const expireDate = new Date(expire_at);
     const formattedDate = expireDate.toLocaleDateString("zh-CN", {
       year: "numeric",
       month: "2-digit",

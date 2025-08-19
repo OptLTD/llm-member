@@ -148,17 +148,20 @@ func (h *OrderHandler) CreatePaymentOrder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户信息失败"})
 		return
 	}
-	if user.ExpiredAt != nil && user.ExpiredAt.After(time.Now()) {
+	if user.ExpireAt != nil && user.ExpireAt.After(time.Now()) {
 		c.JSON(http.StatusOK, gin.H{"error": "您已订阅套餐，不能重复订阅",
-			"plan": user.UserPlan, "expired_at": user.ExpiredAt,
+			"plan": user.UserPlan, "expire_at": user.ExpireAt,
 		})
 		return
 	}
 
 	plan := model.PlanInfo{Plan: string(req.PayPlan)}
-	err = h.setupService.GetAsTarget("plan."+plan.Plan, &plan)
-	if err != nil || plan.Price == 0 || plan.Enabled == false {
+	if err = h.setupService.GetAsTarget("plan."+plan.Plan, &plan); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取套餐价格失败"})
+		return
+	}
+	if plan.Enabled == false {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "该套餐暂不可用"})
 		return
 	}
 
@@ -195,7 +198,9 @@ func (h *OrderHandler) QueryPaymentOrder(c *gin.Context) {
 	currStatus := order.Status
 	err = h.orderService.QueryPayment(order)
 	if err == nil && currStatus != order.Status {
-		if err := h.orderService.PaySuccess(c.Param("id")); err != nil {
+		limit, _ := h.setupService.GetPlanLimit(order.PayPlan)
+		err := h.orderService.PaySuccess(c.Param("id"), limit)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -218,10 +223,11 @@ func (h *OrderHandler) DoPaymentCallback(c *gin.Context) {
 
 	// 这里应该验证支付平台的回调签名
 	// 为了演示，我们直接标记为支付成功
-	if err := h.orderService.PaySuccess(order.OrderID); err != nil {
+	limit, _ := h.setupService.GetPlanLimit(order.PayPlan)
+	err = h.orderService.PaySuccess(order.OrderID, limit)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"message": "支付成功"})
 }

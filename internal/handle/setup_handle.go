@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"llm-member/internal/model"
 	"llm-member/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -30,21 +31,27 @@ func (h *SetupHandler) GetPricingPlans(c *gin.Context) {
 func (h *SetupHandler) SetPricingPlan(c *gin.Context) {
 	planKey := c.Param("plan")
 
-	var req map[string]any
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var plan model.PlanInfo
+	if err := c.ShouldBindJSON(&plan); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if _, err := h.setupService.ParsePlanLimit(&plan); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	// 将整个方案作为JSON对象存储
-	planJSON, err := json.Marshal(req)
-	if err != nil {
+	config := &model.ConfigModel{Kind: "plan", Key: "plan." + planKey}
+	if data, err := json.Marshal(plan); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON format"})
 		return
+	} else {
+		config.Data = string(data)
 	}
 
-	err = h.setupService.SetConfig("plan."+planKey, string(planJSON), "plan")
-	if err != nil {
+	if err := h.setupService.SetConfig(config); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update plan config"})
 		return
 	}

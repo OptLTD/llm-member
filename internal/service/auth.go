@@ -131,10 +131,9 @@ func (s *AuthService) SignUp(req *model.SignUpRequest) (*model.UserModel, error)
 
 	// 创建新用户
 	user := &model.UserModel{
-		DailyLimit: 1000, MonthlyLimit: 10000,
 		Email: req.Email, Username: req.Username,
 		APIKey: apiKey, Password: string(hashedPassword),
-		UserPlan: model.PlanBasic, UserRole: model.RoleUser,
+		UserRole: model.RoleUser, UserPlan: model.PlanBasic,
 	}
 	if err := s.userS.CreateUser(user); err != nil {
 		return nil, fmt.Errorf("创建用户失败: %v", err)
@@ -153,7 +152,7 @@ func (s *AuthService) VerifySignupCode(code string) error {
 	if err := query.First(&reset).Error; err != nil {
 		return fmt.Errorf("无效的验证码")
 	}
-	if reset.ExpiredAt.Before(time.Now()) {
+	if reset.ExpireAt.Before(time.Now()) {
 		return fmt.Errorf("验证码已过期")
 	}
 
@@ -177,7 +176,7 @@ func (s *AuthService) GenerateSignupCode(email string) (*model.VerifyModel, erro
 		return nil, fmt.Errorf("验证码生成失败: %v", err)
 	} else {
 		reset.Token = token
-		reset.ExpiredAt = time.Now().Add(10 * time.Minute)
+		reset.ExpireAt = time.Now().Add(10 * time.Minute)
 	}
 	if res := s.conn.Create(reset); res.Error != nil {
 		return nil, fmt.Errorf("验证码生成失败: %v", res.Error)
@@ -195,11 +194,6 @@ func (s *AuthService) ValidateAPIKey(apiKey string) (*model.UserModel, error) {
 	user, err := s.userS.GetUserByAPIKey(apiKey)
 	if err != nil {
 		return nil, fmt.Errorf("无效的 API Key")
-	}
-
-	// 检查用户限制
-	if err := s.userS.CheckUserLimits(user.ID); err != nil {
-		return nil, err
 	}
 
 	return user, nil
@@ -249,7 +243,7 @@ func (s *AuthService) ForgotPassword(email string) (*model.VerifyModel, error) {
 		return nil, fmt.Errorf("重置码生成失败: %v", err)
 	} else {
 		reset.Token = token
-		reset.ExpiredAt = time.Now().Add(30 * time.Minute) // 30分钟有效期
+		reset.ExpireAt = time.Now().Add(30 * time.Minute) // 30分钟有效期
 	}
 
 	// 删除该邮箱之前的重置记录
@@ -270,7 +264,7 @@ func (s *AuthService) VerifyResetCode(code string) (*model.VerifyModel, error) {
 		return nil, fmt.Errorf("无效的重置码")
 	}
 
-	if reset.ExpiredAt.Before(time.Now()) {
+	if reset.ExpireAt.Before(time.Now()) {
 		return nil, fmt.Errorf("重置码已过期")
 	}
 

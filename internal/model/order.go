@@ -10,12 +10,14 @@ type method = PaymentMethod
 
 // PlanInfo 套餐信息
 type PlanInfo struct {
-	Plan     string   `json:"plan"`
-	Name     string   `json:"name"`
-	Desc     string   `json:"desc"`
-	Price    float64  `json:"price"`
-	Enabled  bool     `json:"enabled"`
-	Features []string `json:"features"`
+	Plan     string   `json:"plan" binding:"required"`
+	Name     string   `json:"name" binding:"required"`
+	Brief    string   `json:"brief" binding:"required"`
+	Price    float64  `json:"price" binding:"required"`
+	Usage    string   `json:"usage" binding:"required"`  // 用量
+	Period   string   `json:"period" binding:"required"` // 周期
+	Enabled  bool     `json:"enabled" binding:"required"`
+	Features []string `json:"features" binding:"required"`
 }
 
 // OrderRequest 支付请求
@@ -69,7 +71,7 @@ type VerifyModel struct {
 	Email string `json:"email" gorm:"index"`
 	Token string `json:"token" gorm:"type:varchar(64)"`
 
-	ExpiredAt time.Time `json:"expired_at"`
+	ExpireAt time.Time `json:"expire_at"`
 	gorm.Model
 }
 

@@ -84,16 +84,10 @@ func (h *BasicHandle) GetUserUsage(c *gin.Context) {
 		return
 	}
 
-	usage := gin.H{
-		"total_tokens":   user.TotalTokens,
-		"total_requests": user.TotalRequests,
-		"daily_limit":    user.DailyLimit,
-		"monthly_limit":  user.MonthlyLimit,
-		"current_plan":   user.UserPlan,
-		"period":         period,
-	}
-
-	c.JSON(http.StatusOK, usage)
+	c.JSON(http.StatusOK, gin.H{
+		"plan": user.UserPlan, "period": period,
+		"limit": user.ApiLimit, "usage": user.ApiUsage,
+	})
 }
 
 // GetUserAPIKeys 获取用户API密钥

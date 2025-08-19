@@ -29,7 +29,7 @@ func main() {
 		log.Fatal("Failed to initialize data:", err)
 	}
 
-	gin.SetMode(cfg.GinMode)
+	gin.SetMode(cfg.AppMode)
 	writer := config.InitLogger(cfg)
 	gin.DefaultWriter = writer
 	gin.DefaultErrorWriter = writer

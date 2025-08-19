@@ -1,10 +1,9 @@
 // 全局状态管理
 const ProfileApp = {
-  user: null,
   token: localStorage.getItem("userToken"),
   currentTab: "usage",
-  apiKey: null,
-  usage: null,
+  usage: {}, limit: {},
+  user: null, apiKey: null,
 };
 
 // 数据管理
@@ -15,11 +14,9 @@ const DataManager = {
       const data = await Utils.apiRequest(
         `/api/profile`,{ method: "GET" }
       );
-      console.log(data, 'dddddd')
       ProfileApp.user = data.user;
       this.updateProfileUI();
     } catch (error) {
-      console.log(error, "dddddd");
       Utils.showNotification(error.message, "error");
       // 如果未授权，跳转到登录页
       if (error.message.includes("未授权")) {
@@ -46,7 +43,9 @@ const DataManager = {
   async loadUsageStats() {
     try {
       const data = await Utils.apiRequest(`/api/usage`);
-      ProfileApp.usage = data;
+      ProfileApp.usage = data.usage || {};
+      ProfileApp.limit = data.limit || {};
+      console.log(data, 'dddd')
       this.updateUsageUI();
     } catch (error) {
       Utils.showNotification(error.message, "error");
@@ -145,7 +144,7 @@ const DataManager = {
 
     const userPlanEl = document.getElementById("userPlan");
     if (userPlanEl) {
-      userPlanEl.textContent = this.getPlanName(user.pay_plan);
+      userPlanEl.textContent = this.getPlanName(user.user_plan);
     }
 
     // 更新模态框用户信息
@@ -219,41 +218,52 @@ const DataManager = {
 
   // 更新使用统计UI
   updateUsageUI() {
-    if (!ProfileApp.usage) return;
+    if (!ProfileApp.usage && !ProfileApp.limit) return;
 
     const usage = ProfileApp.usage;
-
+    const limit = ProfileApp.limit;
     document.getElementById("totalRequests").textContent = Utils.formatNumber(
-      usage.total_requests
+      usage.total_requests || 0
     );
     document.getElementById("totalTokens").textContent = Utils.formatNumber(
-      usage.total_tokens
+      usage.total_tokens || 0
     );
-    document.getElementById("currentPlan").textContent =
-      this.getPlanName(usage.current_plan);
+    const planName = this.getPlanName(ProfileApp.user?.user_plan || 'basic');
+    document.getElementById("currentPlan").textContent = planName;
 
     // 更新进度条（这里需要实际的当日/当月使用数据）
-    const dailyUsed = 0; // 需要从API获取
-    const monthlyUsed = usage.total_requests; // 简化处理
+    let dailyUsed, totalUsed, dailyLimit, totalLimit;
+    switch (limit?.limit_method) {
+      case "tokens": {
+        dailyUsed = usage.today_tokens || 0;
+        totalUsed = usage.total_tokens || 0;
+        dailyLimit = limit.daily_tokens || 0;
+        totalLimit = limit.monthly_tokens || 0;
+        break
+      }
+      case "requests": {
+        dailyUsed = usage.today_requests || 0;
+        totalUsed = usage.total_requests || 0;
+        dailyLimit = limit.daily_requests || 0;
+        totalLimit = limit.monthly_requests || 0;
+        break
+      }
+      case "projects": {
+        dailyUsed = usage.today_projects || 0;
+        totalUsed = usage.total_projects || 0;
+        dailyLimit = limit.daily_projects || 0;
+        totalLimit = limit.monthly_projects || 0;
+        break
+      }
+    }
 
-    document.getElementById(
-      "dailyUsage"
-    ).textContent = `${dailyUsed} / ${Utils.formatNumber(usage.daily_limit)}`;
-    document.getElementById("monthlyUsage").textContent = `${Utils.formatNumber(
-      monthlyUsed
-    )} / ${Utils.formatNumber(usage.monthly_limit)}`;
+    document.getElementById("dailyUsage").textContent = `${dailyUsed} / ${Utils.formatNumber(dailyLimit)}`;
+    document.getElementById("monthlyUsage").textContent = `${Utils.formatNumber(totalUsed)} / ${Utils.formatNumber(totalLimit)}`;
 
-    const dailyPercent = (dailyUsed / usage.daily_limit) * 100;
-    const monthlyPercent = (monthlyUsed / usage.monthly_limit) * 100;
-
-    document.getElementById("dailyProgress").style.width = `${Math.min(
-      dailyPercent,
-      100
-    )}%`;
-    document.getElementById("monthlyProgress").style.width = `${Math.min(
-      monthlyPercent,
-      100
-    )}%`;
+    const dailyPercent = (dailyUsed / dailyLimit) * 100;
+    const totalPercent = (totalUsed / totalLimit) * 100;
+    document.getElementById("dailyProgress").style.width = `${Math.min(dailyPercent, 100)}%`;
+    document.getElementById("monthlyProgress").style.width = `${Math.min(totalPercent, 100)}%`;
   },
 
   // 更新API密钥UI
@@ -268,7 +278,7 @@ const DataManager = {
   updateBillingUI(upgradeOptions, plans) {
     if (!plans || !ProfileApp.user) return;
 
-    const currentPlan = ProfileApp.user.pay_plan;
+    const currentPlan = ProfileApp.user.user_plan;
     const currentPlanData = plans.find(
       (p) => p.plan === currentPlan
     );
@@ -305,28 +315,25 @@ const DataManager = {
     orders.forEach((order) => {
       const row = document.createElement("tr");
       row.className = "bg-white border-b hover:bg-gray-50";
-
       const statusClass = this.getOrderStatusClass(order.status);
       const statusText = this.getOrderStatusText(order.status);
-
       row.innerHTML = `
-                <td class="px-6 py-4 font-medium text-gray-900">${
-                  order.order_id
-                }</td>
-                <td class="px-6 py-4 text-gray-900">${this.getPlanName(
-                  order.pay_plan
-                )}</td>
-                <td class="px-6 py-4 text-gray-900">¥${order.amount}</td>
-                <td class="px-6 py-4">
-                    <span class="px-2 py-1 text-xs font-medium rounded-full ${statusClass}">
-                        ${statusText}
-                    </span>
-                </td>
-                <td class="px-6 py-4 text-gray-500">${Utils.formatDate(
-                  order.succeed_at
-                )}</td>
-            `;
-
+          <td class="px-6 py-4 font-medium text-gray-900">${
+            order.order_id
+          }</td>
+          <td class="px-6 py-4 text-gray-900">${this.getPlanName(
+            order.pay_plan
+          )}</td>
+          <td class="px-6 py-4 text-gray-900">¥${order.amount}</td>
+          <td class="px-6 py-4">
+              <span class="px-2 py-1 text-xs font-medium rounded-full ${statusClass}">
+                  ${statusText}
+              </span>
+          </td>
+          <td class="px-6 py-4 text-gray-500">${Utils.formatDate(
+            order.succeed_at
+          )}</td>
+      `;
       orderHistory.appendChild(row);
     });
   },
@@ -464,8 +471,6 @@ async function checkAuth() {
     console.log(resp, 'dddd1')
     return true;
   } catch (error) {
-    console.log(error, "dddd1");
-    // token无效，已在apiRequest中处理跳转
     return false;
   }
 }

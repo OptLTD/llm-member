@@ -33,7 +33,7 @@ func (s *LogService) GetLogs(req *model.PaginateRequest) (*model.PaginateRespons
 	}
 
 	if model, ok := req.Query["model"]; ok && model != "" {
-		query = query.Where("the_model = ?", model)
+		query = query.Where("model = ?", model)
 	}
 
 	if provider, ok := req.Query["provider"]; ok && provider != "" {
@@ -70,9 +70,9 @@ func (s *LogService) DeleteLog(id uint) error {
 }
 
 // QueryUsage 查询消息的使用详情
-func (s *LogService) QueryUsage(msgId string) (*model.LlmLogModel, error) {
+func (s *LogService) QueryUsage(chat_id string) (*model.LlmLogModel, error) {
 	var log model.LlmLogModel
-	if err := s.db.Where("msg_id = ?", msgId).First(&log).Error; err != nil {
+	if err := s.db.Where("chat_id = ?", chat_id).First(&log).Error; err != nil {
 		return nil, err
 	}
 	return &log, nil

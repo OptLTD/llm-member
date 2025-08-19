@@ -82,59 +82,60 @@ class PricingManager {
     });
 
     // 设置容器为横向网格布局
-    container.className =
-      "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6";
+    container.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6";
     container.innerHTML = sortedPlans
       .map(
         (plan) => `
-            <div class="border rounded-lg p-6 ${
-              plan.enabled
-                ? "border-blue-200 bg-blue-50"
-                : "border-gray-200 bg-gray-50"
-            }">
-                <div class="flex justify-between items-start mb-4">
-                    <div>
-                        <h3 class="text-xl font-semibold mb-2">${plan.name}</h3>
-                        <div class="text-3xl font-bold text-blue-600 mb-2">
-                        ¥${
-                          plan.price
-                        }<span class="text-sm text-gray-500">/月</span>
-                        <span class="px-2 py-1 text-xs rounded-full ${
-                          plan.enabled
-                            ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-800"
-                        }">
-                          ${plan.enabled ? "已启用" : "已禁用"}
-                        </span>
-                        </div>
-                        <p class="text-gray-600">${plan.desc}</p>
-                    </div>
-                    <div class="flex items-center space-x-2">
-                      <button onclick="app.pricingManager.editPricingPlan('${plan.plan}')"
-                        class="text-blue-600 hover:text-blue-800">
-                          <i class="fas fa-edit"></i>
-                      </button>
-                    </div>
-                </div>
-                <div class="mb-4">
-                    <h4 class="font-medium mb-2">特性：</h4>
-                    <ul class="space-y-1">
-                      ${plan.features
-                        .map(
-                          (feature) => `
-                            <li class="flex items-center text-sm">
-                                <i class="fas fa-check text-green-500 mr-2"></i>
-                                ${feature}
-                            </li>
-                      `
-                        )
-                        .join("")}
-                    </ul>
-                </div>
+      <div class="border rounded-lg p-6 flex flex-col h-full ${
+        plan.enabled
+          ? "border-blue-200 bg-blue-50"
+          : "border-gray-200 bg-gray-50"
+      }">
+          <div class="flex justify-between items-start mb-4">
+              <div>
+                  <h3 class="text-xl font-semibold mb-2">${plan.name}</h3>
+                  <div class="text-3xl font-bold text-blue-600 mb-2">
+                  ¥${plan.price}<span class="text-sm text-gray-500">/月</span>
+                  <span class="px-2 py-1 text-xs rounded-full ${
+                    plan.enabled
+                      ? "bg-green-100 text-green-800"
+                      : "bg-gray-100 text-gray-800"
+                  }">
+                    ${plan.enabled ? "已启用" : "已禁用"}
+                  </span>
+                  </div>
+                  <p class="text-gray-600">${plan.brief}</p>
+              </div>
+              <div class="flex items-center space-x-2">
+                <button onclick="app.pricingManager.editPricingPlan('${ plan.plan }')"
+                  class="text-blue-600 hover:text-blue-800">
+                    <i class="fas fa-edit"></i>
+                </button>
+              </div>
+          </div>
+          <div class="flex-1 mb-4">
+              <h4 class="font-medium mb-2">特性：</h4>
+              <ul class="space-y-1">
+                ${plan.features.map((feature) => `
+                  <li class="flex items-center text-sm">
+                      <i class="fas fa-check text-green-500 mr-2"></i>
+                      ${feature}
+                  </li>
+                `).join("")}
+              </ul>
+          </div>
+          <div class="mt-auto pt-4 border-t border-gray-200 flex justify-between items-center">
+            <div>
+                <span class="text-sm text-gray-600">周期：</span>
+                <span class="text-sm font-medium mr-4">${ plan.period || "未设置" }</span>
             </div>
-        `
-      )
-      .join("");
+            <div>
+                <span class="text-sm text-gray-600">用量：</span>
+                <span class="text-sm font-medium">${ plan.usage || "未设置" }</span>
+            </div>
+          </div>
+      </div>`
+    ).join("");
   }
 
   // 编辑付费方案
@@ -154,8 +155,10 @@ class PricingManager {
   showEditPlanModal(plan) {
     document.getElementById("editPlanType").value = plan.plan;
     document.getElementById("editPlanName").value = plan.name;
-    document.getElementById("editPlanDesc").value = plan.desc;
+    document.getElementById("editPlanBrief").value = plan.brief;
     document.getElementById("editPlanPrice").value = plan.price;
+    document.getElementById("editPlanUsage").value = plan.usage;
+    document.getElementById("editPlanPeriod").value = plan.period;
     document.getElementById("editPlanFeatures").value =
       plan.features.join("\n");
     document.getElementById("editPlanEnabled").checked = plan.enabled;
@@ -172,8 +175,11 @@ class PricingManager {
   async savePricingPlan() {
     const planType = document.getElementById("editPlanType").value;
     const planData = {
+      plan: planType,
       name: document.getElementById("editPlanName").value,
-      desc: document.getElementById("editPlanDesc").value,
+      brief: document.getElementById("editPlanBrief").value,
+      usage: document.getElementById("editPlanUsage").value,
+      period: document.getElementById("editPlanPeriod").value,
       price: parseFloat(document.getElementById("editPlanPrice").value),
       features: document
         .getElementById("editPlanFeatures")
@@ -183,10 +189,13 @@ class PricingManager {
     };
 
     try {
-      await this.app.apiCall(`/api/setup/pricing/${planType}`, {
-        method: "PUT",
-        body: JSON.stringify(planData),
+      const resp = await this.app.apiCall(`/api/setup/pricing/${planType}`, {
+        method: "PUT", body: JSON.stringify(planData),
       });
+      if (resp.error) {
+        this.app.showAlert(resp.error, "error");
+        return;
+      }
 
       this.app.showAlert("付费方案保存成功！", "success");
       this.hideEditPlanModal();
