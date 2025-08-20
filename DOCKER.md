@@ -41,23 +41,23 @@
 ### 方式二：使用 Docker 命令
 
 1. **构建镜像**
-   ```bash
-   docker build -t llm-member:latest .
-   ```
+```bash
+docker build -t optltd/llm-member:latest .
+```
 
 2. **运行容器**
-   ```bash
-   docker run -d \
-     --name llm-member-app \
-     -p 8080:8080 \
-     -v llm_storage:/app/storage \
-     -e APP_PORT=8080 \
-     -e APP_MODE=release \
-     -e ADMIN_USERNAME=admin \
-     -e ADMIN_PASSWORD=admin123 \
-     -e OPENAI_API_KEY=your_openai_api_key_here \
-     llm-member:latest
-   ```
+```bash
+docker run -d \
+   --name llm-member-app \
+   -p 8080:8080 \
+   -v llm_storage:/app/storage \
+   -e APP_PORT=8080 \
+   -e APP_MODE=test \
+   -e ADMIN_USERNAME=admin \
+   -e ADMIN_PASSWORD=admin123 \
+   -e OPENAI_API_KEY=your_openai_api_key_here \
+   optltd/llm-member:latest
+```
 
 ## 配置说明
 

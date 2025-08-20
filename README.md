@@ -70,17 +70,18 @@ fetch('/v1/chat/completions', {
 ### 1. 部署服务
 
 ```bash
-# 克隆项目
-git clone https://github.com/OptLTD/llm-member.git
-cd llm-member
-
-# 配置环境变量
-cp .env.example .env
-# 编辑 .env 文件，配置您的模型API密钥
-
-# 启动服务
-go run main.go
+docker run -d \
+   --name llm-member-app \
+   -p 8080:8080 \
+   -v llm_storage:/app/storage \
+   -e APP_PORT=8080 \
+   -e APP_MODE=test \
+   -e ADMIN_USERNAME=admin \
+   -e ADMIN_PASSWORD=admin123 \
+   -e DEEPSEEK_API_KEY=sk-you-api-key \
+   optltd/llm-member:latest
 ```
+完整配置参考[.env.example](.env.example)
 
 ### 2. 配置您的产品
 
