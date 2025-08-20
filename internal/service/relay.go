@@ -131,6 +131,15 @@ func (s *RelayService) GetModels() []model.LLModelInfo {
 		}...)
 	}
 
+	// DeepSeek 模型
+	if config.HasProvider("deepseek") {
+		modelList = append(modelList, []model.LLModelInfo{
+			{ID: "deepseek-chat", Object: "model", Provider: "deepseek", Name: "DeepSeek Chat"},
+			{ID: "deepseek-coder", Object: "model", Provider: "deepseek", Name: "DeepSeek Coder"},
+			{ID: "deepseek-reasoner", Object: "model", Provider: "deepseek", Name: "DeepSeek Reasoner"},
+		}...)
+	}
+
 	// OpenAI-Like 模型
 	if config.HasProvider("openai-like") {
 		modelList = append(modelList, []model.LLModelInfo{
@@ -167,6 +176,11 @@ func (s *RelayService) getProvider(model string) string {
 		return "bigmodel"
 	}
 
+	// DeepSeek 模型
+	if strings.HasPrefix(model, "deepseek-") {
+		return "deepseek"
+	}
+
 	// Grok 模型
 	if strings.HasPrefix(model, "grok-") {
 		return "grok"
@@ -183,7 +197,7 @@ func (s *RelayService) getProvider(model string) string {
 	}
 
 	// SiliconFlow 模型
-	if model == "deepseek-chat" || strings.Contains(model, "llama") || strings.Contains(model, "qwen/") {
+	if strings.Contains(model, "qwen/") {
 		return "siliconflow"
 	}
 

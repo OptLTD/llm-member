@@ -16,90 +16,88 @@ func GetProviders() []LLMProvider {
 	// OpenAI
 	if apiKey := getEnv("OPENAI_API_KEY", ""); apiKey != "" {
 		providers = append(providers, LLMProvider{
-			Name:    "openai",
+			Name: "openai", APIKey: apiKey,
 			BaseURL: getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-			APIKey:  apiKey,
 		})
 	}
 
 	// Claude
 	if apiKey := getEnv("CLAUDE_API_KEY", ""); apiKey != "" {
 		providers = append(providers, LLMProvider{
-			Name:    "claude",
+			Name: "claude", APIKey: apiKey,
 			BaseURL: getEnv("CLAUDE_BASE_URL", "https://api.anthropic.com/v1"),
-			APIKey:  apiKey,
 		})
 	}
 
 	// 通义千问
 	if apiKey := getEnv("QWEN_API_KEY", ""); apiKey != "" {
 		providers = append(providers, LLMProvider{
-			Name:    "qwen",
+			Name: "qwen", APIKey: apiKey,
 			BaseURL: getEnv("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/api/v1"),
-			APIKey:  apiKey,
 		})
 	}
 
 	// 豆包
 	if apiKey := getEnv("DOUBAO_API_KEY", ""); apiKey != "" {
 		providers = append(providers, LLMProvider{
-			Name:    "doubao",
+			Name: "doubao", APIKey: apiKey,
 			BaseURL: getEnv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3"),
-			APIKey:  apiKey,
 		})
 	}
 
 	// 智谱清言
 	if apiKey := getEnv("BIGMODEL_API_KEY", ""); apiKey != "" {
 		providers = append(providers, LLMProvider{
-			Name:    "bigmodel",
+			Name: "bigmodel", APIKey: apiKey,
 			BaseURL: getEnv("BIGMODEL_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
-			APIKey:  apiKey,
 		})
 	}
 
 	// Grok
 	if apiKey := getEnv("GROK_API_KEY", ""); apiKey != "" {
 		providers = append(providers, LLMProvider{
-			Name:    "grok",
+			Name: "grok", APIKey: apiKey,
 			BaseURL: getEnv("GROK_BASE_URL", "https://api.x.ai/v1"),
-			APIKey:  apiKey,
 		})
 	}
 
 	// Gemini
 	if apiKey := getEnv("GEMINI_API_KEY", ""); apiKey != "" {
 		providers = append(providers, LLMProvider{
-			Name:    "gemini",
+			Name: "gemini", APIKey: apiKey,
 			BaseURL: getEnv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"),
-			APIKey:  apiKey,
 		})
 	}
 
 	// OpenRouter
 	if apiKey := getEnv("OPENROUTER_API_KEY", ""); apiKey != "" {
 		providers = append(providers, LLMProvider{
-			Name:    "openrouter",
+			Name: "openrouter", APIKey: apiKey,
 			BaseURL: getEnv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-			APIKey:  apiKey,
 		})
 	}
 
 	// SiliconFlow
 	if apiKey := getEnv("SILICONFLOW_API_KEY", ""); apiKey != "" {
 		providers = append(providers, LLMProvider{
-			Name:    "siliconflow",
+			Name: "siliconflow", APIKey: apiKey,
 			BaseURL: getEnv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1"),
-			APIKey:  apiKey,
+		})
+	}
+
+	// DeepSeek
+	if apiKey := getEnv("DEEPSEEK_API_KEY", ""); apiKey != "" {
+		providers = append(providers, LLMProvider{
+			Name: "deepseek", APIKey: apiKey,
+			BaseURL: getEnv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
 		})
 	}
 
 	// OpenAI-Like
 	if apiKey := getEnv("OPENAI_LIKE_API_KEY", ""); apiKey != "" {
 		providers = append(providers, LLMProvider{
-			Name:    "openai-like",
+			Name: "openai-like", APIKey: apiKey,
 			BaseURL: getEnv("OPENAI_LIKE_BASE_URL", ""),
-			APIKey:  apiKey,
 		})
 	}
 
