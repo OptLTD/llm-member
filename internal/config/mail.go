@@ -10,11 +10,18 @@ type MailConfig struct {
 
 // GetMailConfig 获取邮件配置
 func GetMailConfig() *MailConfig {
-	return &MailConfig{
+	cfg := &MailConfig{
 		FromName: getEnv("MAIL_FROM_NAME", ""),
 		HostAddr: getEnv("MAIL_HOST_ADDR", ""),
 		FromAddr: getEnv("MAIL_FROM_ADDR", ""),
 		Password: getEnv("MAIL_PASS_WORD", ""),
 		UserName: getEnv("MAIL_USER_NAME", ""),
 	}
+	if cfg.FromAddr == "" {
+		cfg.FromAddr = cfg.UserName
+	}
+	if cfg.FromName == "" {
+		cfg.FromName = getEnv("APP_NAME", "Demo")
+	}
+	return cfg
 }
