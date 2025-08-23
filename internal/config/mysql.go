@@ -9,6 +9,8 @@ import (
 )
 
 type MySQLConfig struct {
+	DSN string // DSN
+
 	Host string // 主机地址
 	Port string // 端口
 	User string // 用户名
@@ -26,6 +28,10 @@ func GetMySQLDB(cfg *MySQLConfig) (*gorm.DB, error) {
 		"%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=True&loc=Local",
 		cfg.User, cfg.Pass, cfg.Host, cfg.Port, cfg.Name, "utf8mb4",
 	)
+	// dsn first
+	if cfg.DSN != "" {
+		dsn = cfg.DSN
+	}
 	var logMode = logger.Error
 	switch getEnv("APP_MODE", "test") {
 	case "debug":

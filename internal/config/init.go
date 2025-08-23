@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -63,6 +62,12 @@ func Load() *Config {
 			DB:   getEnv("REDIS_DB", "0"),
 		}
 	}
+	if url := getEnv("REDIS_URL", ""); url != "" {
+		cfg.Redis = &RedisConfig{Url: url}
+	}
+	if dsn := getEnv("MYSQL_DSN", ""); dsn != "" {
+		cfg.MySQL = &MySQLConfig{DSN: dsn}
+	}
 	return cfg
 }
 
@@ -72,10 +77,10 @@ func InitDB(cfg *Config) error {
 	var db *gorm.DB
 	var err error
 	// 检查是否配置了MySQL
-	if cfg.MySQL.User == "" || cfg.MySQL.Name == "" {
-		db, err = GetSQLiteDB(cfg)
-	} else {
+	if cfg.MySQL.Pass != "" || cfg.MySQL.DSN != "" {
 		db, err = GetMySQLDB(cfg.MySQL)
+	} else {
+		db, err = GetSQLiteDB(cfg)
 	}
 	if err != nil {
 		return err
@@ -93,8 +98,8 @@ func GetRedis() *redis.Client {
 
 // InitRedis 初始化Redis连接
 func InitRedis(cfg *RedisConfig) error {
-	if cfg == nil || cfg.Host == "" || cfg.Port == "" {
-		return fmt.Errorf("redis config is incomplete")
+	if cfg == nil || cfg.Host == "" || cfg.Url == "" {
+		return nil
 	}
 	client, err := GetRedisClient(cfg)
 	if err != nil {

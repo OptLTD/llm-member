@@ -30,12 +30,7 @@ func main() {
 	}
 
 	gin.SetMode(cfg.AppMode)
-	writer := config.InitLogger(cfg)
-	gin.DefaultWriter = writer
-	gin.DefaultErrorWriter = writer
-
 	r := gin.Default()
-
 	r.Use(cors.New(cors.Config{
 		AllowHeaders: []string{"*"},
 		AllowOrigins: []string{"*"},
