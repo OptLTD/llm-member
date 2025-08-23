@@ -1,26 +1,20 @@
-# fly.toml app configuration file generated for llm-member on 2025-08-19T21:52:00+08:00
+# fly.toml app configuration file generated for llm-member on 2025-08-23T15:23:18+08:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
 app = 'llm-member'
-primary_region = 'sjc'
-
-[env]
-  APP_MODE='test'
-  APP_PORT='8080'
-  APP_NAME='Swiflow'
-
-  # 管理员配置
-  ADMIN_USERNAME='admin'
-  ADMIN_PASSWORD='admin123'
-
-  # 邮箱配置
-  # MAIL_HOST_ADDR='smtp.163.com:994'
-  # MAIL_PASS_WORD='xxxxxxxxxxxxxxxx'
-  # MAIL_USER_NAME='xxxxxxxx@163.com'
+primary_region = 'hkg'
 
 [build]
+  image = 'docker.io/optltd/llm-member:latest'
+
+[env]
+  ADMIN_PASSWORD = 'admin123'
+  ADMIN_USERNAME = 'admin'
+  APP_MODE = 'test'
+  APP_NAME = 'Swiflow'
+  APP_PORT = '8080'
 
 [http_service]
   internal_port = 8080
@@ -31,6 +25,6 @@ primary_region = 'sjc'
   processes = ['app']
 
 [[vm]]
-  memory = '1gb'
+  memory = '256mb'
   cpu_kind = 'shared'
   cpus = 1
