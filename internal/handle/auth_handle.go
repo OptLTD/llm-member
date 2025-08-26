@@ -267,8 +267,11 @@ func (h *AuthHandle) BuildCallbackToken(c *gin.Context) {
 		return
 	}
 
+	// 时间戳
+	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+
 	// 生成签名
-	sign, err := h.authService.GenerateCallbackSign(token, user.Email)
+	sign, err := h.authService.GenerateCallbackSign(token, user.Email, timestamp)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成签名失败"})
 		return
@@ -282,8 +285,8 @@ func (h *AuthHandle) BuildCallbackToken(c *gin.Context) {
 	}
 
 	// 构建回调URL
-	timestamp := time.Now().Unix()
-	callbackURL := fmt.Sprintf("%s?token=%s&sign=%s&time=%s",
+	callbackURL := fmt.Sprintf(
+		"%s?token=%s&sign=%s&time=%s",
 		callback_url, token, sign, timestamp,
 	)
 
@@ -319,7 +322,7 @@ func (h *AuthHandle) VerifyCallbackToken(c *gin.Context) {
 		return
 	}
 	// 验证签名
-	sign, err := h.authService.GenerateCallbackSign(req.Token, user.Email)
+	sign, err := h.authService.GenerateCallbackSign(req.Token, user.Email, req.Time)
 	if err != nil || sign != req.Sign {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "签名验证失败"})
 		return

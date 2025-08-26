@@ -33,24 +33,25 @@ func (h *PublicHandle) GetPricingPlans(c *gin.Context) {
 func StaticRouteHandle(cfg *config.Config) gin.HandlerFunc {
 	var i18nService = service.NewI18nService()
 	var RenderPage = func(c *gin.Context, templateName string) {
-		tmplPath := filepath.Join("./webroot", templateName+".html")
-		tmpl, err := template.ParseFiles(tmplPath)
-		if err != nil {
-			c.String(500, "页面加载失败")
-			return
-		}
-
 		// 获取语言参数
 		language := c.DefaultQuery("lang", "zh")
 		translations := i18nService.GetTranslations(language)
-		c.Header("Content-Type", "text/html; charset=utf-8")
 		templateData := gin.H{
 			"AppName": cfg.AppName, "AppDesc": cfg.AppDesc,
 			"Language": language, "T": translations,
 		}
 
-		err = tmpl.Execute(c.Writer, templateData)
-		if err != nil {
+		var curr *template.Template
+		tmplPath := filepath.Join("./webroot", templateName+".html")
+		if tmpl, err := template.ParseFiles(tmplPath); err != nil {
+			c.String(404, "页面加载失败")
+		} else {
+			curr = tmpl
+		}
+
+		c.Status(200)
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		if err := curr.Execute(c.Writer, templateData); err != nil {
 			c.String(500, "页面渲染失败")
 		}
 	}

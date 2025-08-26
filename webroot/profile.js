@@ -8,23 +8,6 @@ const ProfileApp = {
 
 // 数据管理
 const DataManager = {
-  // 加载用户资料
-  async loadUserProfile() {
-    try {
-      const data = await Utils.apiRequest(
-        `/api/profile`,{ method: "GET" }
-      );
-      ProfileApp.user = data.user;
-      this.updateProfileUI();
-    } catch (error) {
-      Utils.showNotification(error.message, "error");
-      // 如果未授权，跳转到登录页
-      if (error.message.includes("未授权")) {
-        window.location.href = "/";
-      }
-    }
-  },
-
   // 更新用户资料
   async updateUserProfile(profileData) {
     try {
@@ -70,9 +53,7 @@ const DataManager = {
     }
 
     try {
-      const data = await Utils.apiRequest(`/api/regenerate`, {
-        method: "POST",
-      });
+      const data = await Utils.apiRequest(`/api/regenerate`, {});
       ProfileApp.apiKey = data.api_key;
       this.updateAPIKeysUI();
       Utils.showNotification("API密钥重新生成成功", "success");
@@ -450,39 +431,25 @@ const TabManager = {
   },
 };
 
-// 事件监听器已移动到 utils.js 中的 EventListeners.setupProfileEventListeners()
-
-// 初始化检查
-async function checkAuth() {
-  if (!ProfileApp.token) {
-    // 显示登录提示并跳转到登录页面
-    Utils.showNotification("请先登录", "warning");
-    setTimeout(() => {
-      window.location.href = "/signin";
-    }, 1500);
-    return false;
-  }
-
-  // 验证token有效性
-  try {
-    const resp = await Utils.apiRequest(
-      `/api/profile`, { method: "GET" }
-    );
-    console.log(resp, 'dddd1')
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
 // 页面加载完成后初始化
 document.addEventListener("DOMContentLoaded", async () => {
-  const isAuthenticated = await checkAuth();
-  if (!isAuthenticated) return;
+  if (!ProfileApp.token) {
+    window.location.href = "/signin";
+    return false;
+  }
 
-  // 设置事件监听器
-  if (window.App && window.App.EventListeners) {
-    window.App.EventListeners.setupEventListeners();
+  if (window.App && window.App.Auth) {
+    await window.App.Auth.checkAuth();
+    if (!window.App.Auth.isLoggedIn) {
+      window.location.href = "/signin";
+      return;
+    } else {
+      ProfileApp.user = Auth.user;
+      DataManager.updateProfileUI();
+    }
+  }
+  if (window.App && window.App.Pages) {
+    window.App.Pages.setupPageClick();
   }
 
   // 标签页切换
@@ -492,8 +459,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       TabManager.switchTab(tabName);
     });
   });
-
-  DataManager.loadUserProfile();
 
   // 默认显示使用统计标签页
   TabManager.switchTab("usage");

@@ -231,7 +231,6 @@
                         'Content-Type': 'application/json'
                     }
                 };
-
                 const response = await fetch(url, {
                     ...defaultOptions,
                     ...options,
@@ -240,13 +239,10 @@
                         ...options.headers
                     }
                 });
-
                 const data = await response.json();
-                
                 if (!response.ok) {
                     throw new Error(data.error || '请求失败');
                 }
-                
                 return data;
             }
         };
@@ -339,12 +335,24 @@
         }
 
         // 检查是否已登录
-        function checkExistingSignin() {
-            const token = localStorage.getItem('userToken');
+        async function checkExistingSignin()  {
             const path = window.location.pathname;
-            if (path === '/authorization' && token) {
+            const token = localStorage.getItem('userToken');
+            if (!token || token.trim() === '') {
+                return
+            }
+            const data = await Utils.apiRequest('/api/profile', {
+                method: 'GET', headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (!data?.user) {
+                return
+            }
+            if (path === '/authorization') {
                 showAppLoginModal();
-            } else if (token) {
+            } else if (data.user){
                 Utils.showNotification('您已登录，正在跳转...', 'info');
                 setTimeout(() => {
                     window.location.href = '/profile';
@@ -395,16 +403,16 @@
         }
 
         // 设置事件监听器
-        function setupAppLoginEventListeners() {
+        function setupAppLoginClick() {
             document.getElementById('cancelAppLogin').addEventListener('click', hideAppLoginModal);
             document.getElementById('confirmAppLogin').addEventListener('click', confirmAppLogin);
         }
 
         // 页面初始化
-        document.addEventListener('DOMContentLoaded', () => {
-            checkExistingSignin();
+        document.addEventListener('DOMContentLoaded', async () => {
+            setupAppLoginClick(); // 新增
             setupEventListeners();
-            setupAppLoginEventListeners(); // 新增
+            await checkExistingSignin();
             
             // 聚焦到用户名输入框
             document.getElementById('username').focus();

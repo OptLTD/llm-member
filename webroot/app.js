@@ -37,7 +37,7 @@ const PageManager = {
 
   // 显示个人资料页面
   showProfilePage() {
-    if (!AppState.isLoggedIn) {
+    if (!Auth.isLoggedIn) {
       Utils.showNotification("请先登录", "warning");
       return;
     }
@@ -48,7 +48,7 @@ const PageManager = {
 
   // 显示使用统计页面
   showUsagePage() {
-    if (!AppState.isLoggedIn) {
+    if (!Auth.isLoggedIn) {
       Utils.showNotification("请先登录", "warning");
       return;
     }
@@ -59,7 +59,7 @@ const PageManager = {
 
   // 显示API密钥页面
   showApiKeysPage() {
-    if (!AppState.isLoggedIn) {
+    if (!Auth.isLoggedIn) {
       Utils.showNotification("请先登录", "warning");
       return;
     }
@@ -74,8 +74,8 @@ document.addEventListener("DOMContentLoaded", () => {
   PageManager.init();
 
   // 设置事件监听器
-  if (window.App && window.App.EventListeners) {
-    window.App.EventListeners.setupEventListeners();
+  if (window.App && window.App.Pages) {
+    window.App.Pages.setupPageClick();
   }
 
   // 检查用户登录状态并更新UI

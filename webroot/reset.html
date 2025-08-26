@@ -320,8 +320,7 @@
                 resetBtn.innerHTML = '<i class="fas fa-spinner loading-spinner mr-2"></i>重置中...';
 
                 await Utils.apiRequest('/api/reset-password', {
-                    method: 'POST',
-                    body: JSON.stringify({
+                    method: 'POST', body: JSON.stringify({
                         code: ResetApp.resetCode,
                         password: formData.newPassword
                     })

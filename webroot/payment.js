@@ -9,26 +9,6 @@ class PaymentManager {
     this.customAmount = 0;
     this.currentOrderId = null;
     this.paymentCheckInterval = null;
-
-    this.init();
-    this.initUserMenu();
-  }
-
-  initUserMenu() {
-    // 初始化用户菜单
-    this.loadUserInfo();
-    this.bindUserMenuEvents();
-  }
-
-  async loadUserInfo() {
-    try {
-      const data = await Utils.apiRequest("/api/profile");
-      if (data.user) {
-        this.updateUserDisplay(data.user);
-      }
-    } catch (error) {
-      console.error("加载用户信息错误:", error);
-    }
   }
 
   updateUserDisplay(user) {
@@ -81,13 +61,8 @@ class PaymentManager {
   }
 
   async init() {
-    // 检查登录状态
-    if (!this.checkAuth()) {
-      localStorage.setItem("prevPage", "/payment");
-      window.location.href = "/signin";
-      return;
-    }
-
+    // bind MENU
+    this.bindUserMenuEvents();
     // 加载套餐和支付方式
     await this.loadPlans();
     await this.loadPayments();
@@ -98,11 +73,6 @@ class PaymentManager {
       this.bindEvents();
       this.updatePayButton();
     }, 300);
-  }
-
-  checkAuth() {
-    const token = localStorage.getItem("userToken");
-    return token && token.trim() !== "";
   }
 
   async loadPlans() {
@@ -395,7 +365,7 @@ class PaymentManager {
 
   async loadImage(url) {
     try {
-      const token = AppState.token;
+      const token = Auth.token;
       const response = await fetch(url, {
         method: "POST", headers: {
           Authorization: `Bearer ${token}`,
@@ -523,11 +493,23 @@ class PaymentManager {
 }
 
 // 页面加载完成后初始化
-document.addEventListener("DOMContentLoaded", () => {
-  new PaymentManager();
+document.addEventListener("DOMContentLoaded", async () => {
+  const token = localStorage.getItem("userToken");
+  if (!token || token.trim() === "") {
+    localStorage.setItem("prevPage", "/payment");
+    window.location.href = "/signin";
+    return
+  }
 
   // 检查用户登录状态并更新UI
   if (window.App && window.App.Auth) {
-    window.App.Auth.checkAuth();
+    await window.App.Auth.checkAuth();
+    if (!window.App.Auth.user) {
+      localStorage.setItem("prevPage", "/payment");
+      window.location.href = "/signin";
+      return
+    }
+    const payment = new PaymentManager();
+    payment.init()
   }
 });

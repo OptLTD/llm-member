@@ -158,22 +158,20 @@ const PricingPage = {
             </div>
         `;
   },
-
-  // 事件监听器已移动到 utils.js 中的 EventListeners.setupPricingEventListeners()
 };
 
 // 页面加载完成后初始化
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   PricingPage.init();
-
-  // 设置事件监听器
-  if (window.App && window.App.EventListeners) {
-    window.App.EventListeners.setupEventListeners();
-  }
 
   // 检查用户登录状态并更新UI
   if (window.App && window.App.Auth) {
-    window.App.Auth.checkAuth();
+    await window.App.Auth.checkAuth();
+  }
+
+  // 设置事件监听器
+  if (window.App && window.App.Pages) {
+    window.App.Pages.setupPageClick();
   }
 });
 
@@ -183,7 +181,7 @@ window.PricingPage = PricingPage;
 // 将selectPlan函数添加到全局作用域
 window.selectPlan = (planType) => {
   // 检查用户是否已登录
-  if (!AppState.isLoggedIn) {
+  if (!Auth.isLoggedIn) {
     localStorage.setItem("prevPage", "/payment");
     Utils.showNotification("请先登录后再选择套餐", "warning");
     window.location.href = "/signin";

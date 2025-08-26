@@ -1,12 +1,9 @@
-// 全局状态管理
-const AppState = {
+// 认证管理
+const Auth = {
   user: null,
   token: localStorage.getItem("userToken"),
   isLoggedIn: false,
-};
 
-// 认证管理
-const Auth = {
   // 登录
   async signin(username, password) {
     try {
@@ -14,9 +11,9 @@ const Auth = {
         body: JSON.stringify({ username, password }),
       });
 
-      AppState.token = data.token;
-      AppState.user = data.user;
-      AppState.isLoggedIn = true;
+      this.user = data.user;
+      this.token = data.token;
+      this.isLoggedIn = true;
 
       localStorage.setItem("userToken", data.token);
       localStorage.setItem("userData", JSON.stringify(data.user));
@@ -48,9 +45,9 @@ const Auth = {
 
   // 退出登录
   async signout() {
-    AppState.token = null;
-    AppState.user = null;
-    AppState.isLoggedIn = false;
+    this.user = null;
+    this.token = null;
+    this.isLoggedIn = false;
 
     localStorage.removeItem("userToken");
     localStorage.removeItem("userData");
@@ -58,27 +55,42 @@ const Auth = {
     this.updateUI();
   },
 
+  // 登录信息
+  async profile() {
+    try {
+      const data = await Utils.apiRequest(
+        `/api/profile`, { method: "GET" },
+      );
+      Auth.user = data.user;
+      Auth.isLoggedIn = true;
+      localStorage.setItem(
+        "userData", JSON.stringify(data.user)
+      );
+    } catch (error) {
+      return false;
+    }
+  },
+
   // 检查登录状态
   async checkAuth() {
-    const token = localStorage.getItem("userToken");
-    const userData = localStorage.getItem("userData");
-
-    if (token && userData) {
-      try {
-        AppState.token = token;
-        AppState.user = JSON.parse(userData);
-        AppState.isLoggedIn = true;
-        this.updateUI();
-      } catch (error) {
-        console.error("检查登录状态失败:", error);
-        this.logout();
-      }
-    } else {
-      // 如果没有token或用户数据，确保状态为未登录
-      AppState.token = null;
-      AppState.user = null;
-      AppState.isLoggedIn = false;
+    const resetState = () => {
+      this.user = null;
+      this.token = null;
+      this.isLoggedIn = false;
       this.updateUI();
+    };
+
+    const token = localStorage.getItem("userToken");
+    if (!token || token.trim() === "") {
+      resetState();
+      return;
+    }
+    // REFRESH
+    await this.profile();
+    if (this.user) {
+      this.updateUI();
+    } else {
+      resetState();
     }
   },
 
@@ -89,11 +101,11 @@ const Auth = {
     const signinBtn = document.getElementById("signInBtn");
     const signupBtn = document.getElementById("signUpBtn");
 
-    if (AppState.isLoggedIn && AppState.user) {
+    if (this.isLoggedIn && this.user) {
       if (signupBtn) signupBtn.style.display = "none";
       if (signinBtn) signinBtn.style.display = "none";
       if (userMenu) userMenu.classList.remove("hidden");
-      if (userName) userName.textContent = AppState.user.username;
+      if (userName) userName.textContent = this.user.username;
     } else {
       if (signupBtn) signupBtn.style.display = "block";
       if (signinBtn) signinBtn.style.display = "block";
@@ -157,20 +169,21 @@ const Utils = {
       },
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
       // 如果是401未授权错误，自动跳转到登录页面
       if (response.status === 401) {
         Auth.signout();
-        const path = location.pathname
+        const path = location.pathname;
         localStorage.setItem("prevPage", path);
         window.location.href = "/signin";
         throw new Error("认证已过期，请重新登录");
       }
-      throw new Error(data.error || "请求失败");
     }
 
+    const data = await response.json();
+    if (data.error) {
+      throw new Error(data.error || "请求失败");
+    }
     return data;
   },
 
@@ -251,14 +264,14 @@ const Utils = {
 };
 
 // 事件监听器管理
-const EventListeners = {
+const Pages = {
   // 首页事件监听器
-  setupHomeEventListeners() {
+  setupHomeClick() {
     // 开始使用按钮
     const getStartedBtn = document.getElementById("getStartedBtn");
     if (getStartedBtn) {
       getStartedBtn.addEventListener("click", () => {
-        if (AppState.isLoggedIn) {
+        if (Auth.isLoggedIn) {
           window.location.hash = "#profile";
         } else {
           window.location.href = "/signup";
@@ -270,7 +283,7 @@ const EventListeners = {
     const ctaStartBtn = document.getElementById("ctaStartBtn");
     if (ctaStartBtn) {
       ctaStartBtn.addEventListener("click", () => {
-        if (AppState.isLoggedIn) {
+        if (Auth.isLoggedIn) {
           window.location.hash = "/profile";
         } else {
           window.location.href = "/signup";
@@ -294,7 +307,7 @@ const EventListeners = {
   },
 
   // 个人中心事件监听器
-  setupProfileEventListeners() {
+  setupProfileClick() {
     // 侧边栏头像点击事件
     const sidebarUserName = document.getElementById("sidebarUserName");
     if (sidebarUserName) {
@@ -422,45 +435,25 @@ const EventListeners = {
   },
 
   // 价格页面事件监听器
-  setupPricingEventListeners() {
+  setupPricingClick() {
     // 价格页面特有的事件监听器可以在这里添加
     // 目前价格页面没有特有的事件监听器
   },
 
   // 注册页面事件监听器
-  setupSignupEventListeners() {
+  setupSignupClick() {
     // 注册页面保持原有的事件监听器，不做调整
     // 页面自身的事件监听器继续在页面内部处理
   },
 
   // 登录页面事件监听器
-  setupSigninEventListeners() {
+  setupSigninClick() {
     // 登录页面保持原有的事件监听器，不做调整
     // 页面自身的事件监听器继续在页面内部处理
   },
 
-  // 通用事件监听器设置
-  setupEventListeners() {
-    // 根据当前页面路径决定设置哪些事件监听器
-    const path = window.location.pathname;
-    if (path === "/" || path === "/index.html") {
-      this.setupHomeEventListeners();
-    } else if (path === "/profile" || path === "/profile.html") {
-      this.setupProfileEventListeners();
-    } else if (path === "/pricing" || path === "/pricing.html") {
-      this.setupPricingEventListeners();
-    } else if (path === "/signup" || path === "/signup.html") {
-      this.setupSignupEventListeners();
-    } else if (path === "/signin" || path === "/signin.html") {
-      this.setupSigninEventListeners();
-    }
-
-    // 设置通用的事件监听器（所有页面都需要的）
-    this.setupCommonEventListeners();
-  },
-
   // 通用事件监听器（所有页面都需要的）
-  setupCommonEventListeners() {
+  setupCommonClick() {
     const userMenuBtn = document.getElementById("userMenuBtn");
     const userDropdown = document.getElementById("userDropdown");
     if (userMenuBtn && userDropdown) {
@@ -503,11 +496,30 @@ const EventListeners = {
       });
     }
   },
+
+  // 通用事件监听器设置
+  setupPageClick() {
+    // 根据当前页面路径决定设置哪些事件监听器
+    const path = window.location.pathname;
+    if (path === "/" || path === "/index.html") {
+      this.setupHomeClick();
+    } else if (path === "/profile" || path === "/profile.html") {
+      this.setupProfileClick();
+    } else if (path === "/pricing" || path === "/pricing.html") {
+      this.setupPricingClick();
+    } else if (path === "/signup" || path === "/signup.html") {
+      this.setupSignupClick();
+    } else if (path === "/signin" || path === "/signin.html") {
+      this.setupSigninClick();
+    }
+
+    // 设置通用的事件监听器（所有页面都需要的）
+    this.setupCommonClick();
+  },
 };
 
 window.App = {
   Auth,
   Utils,
-  AppState,
-  EventListeners,
+  Pages,
 };

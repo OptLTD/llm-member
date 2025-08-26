@@ -447,9 +447,9 @@ func (s *AuthService) GenerateCallbackToken(user *model.UserModel) (string, erro
 }
 
 // GenerateCallbackSign 生成回调签名
-func (s *AuthService) GenerateCallbackSign(token, email string) (string, error) {
+func (s *AuthService) GenerateCallbackSign(token, email, suff string) (string, error) {
 	// 使用简单的签名算法，实际项目中应使用更安全的方法
-	data := fmt.Sprintf("%s:%s:%d", token, email, time.Now().Unix())
+	data := fmt.Sprintf("%s:%s:%s", token, email, suff)
 	hash := sha256.Sum256([]byte(data))
 	return fmt.Sprintf("sn-%x", hash[:16]), nil
 }
