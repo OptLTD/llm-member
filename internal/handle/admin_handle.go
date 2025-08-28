@@ -86,7 +86,7 @@ func (h *AdminHandle) GenerateAPIKey(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"api_key": user.APIKey, "user": user.ToUserResponse(),
+		"apiKey": user.APIKey, "user": user.ToUserResponse(),
 	})
 }
 
@@ -104,7 +104,7 @@ func (h *AdminHandle) DeleteUser(c *gin.Context) {
 func (h *AdminHandle) ToggleUserStatus(c *gin.Context) {
 	userID, _ := strconv.ParseUint(c.Param("id"), 10, 32)
 	var req struct {
-		IsActive bool `json:"is_active"`
+		IsActive bool `json:"isActive"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

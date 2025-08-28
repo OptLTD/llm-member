@@ -57,17 +57,17 @@ func (s *StatsService) getAPIStats(stats *model.StatsResponse) error {
 	// MySQL和SQLite都支持JSON_EXTRACT函数
 	s.db.Model(&model.LlmLogModel{}).
 		Where("status = ? AND req_time >= ? AND req_time < ?", "success", monthStart, nextMonth).
-		Select("COALESCE(SUM(CAST(JSON_EXTRACT(all_usage, '$.total_tokens') AS SIGNED)), 0)").
+		Select("COALESCE(SUM(CAST(JSON_EXTRACT(all_usage, '$.totalTokens') AS SIGNED)), 0)").
 		Scan(&stats.TotalTokens)
 
 	s.db.Model(&model.LlmLogModel{}).
 		Where("status = ? AND req_time >= ? AND req_time < ?", "success", monthStart, nextMonth).
-		Select("COALESCE(SUM(CAST(JSON_EXTRACT(all_usage, '$.prompt_tokens') AS SIGNED)), 0)").
+		Select("COALESCE(SUM(CAST(JSON_EXTRACT(all_usage, '$.promptTokens') AS SIGNED)), 0)").
 		Scan(&stats.InputTokens)
 
 	s.db.Model(&model.LlmLogModel{}).
 		Where("status = ? AND req_time >= ? AND req_time < ?", "success", monthStart, nextMonth).
-		Select("COALESCE(SUM(CAST(JSON_EXTRACT(all_usage, '$.completion_tokens') AS SIGNED)), 0)").
+		Select("COALESCE(SUM(CAST(JSON_EXTRACT(all_usage, '$.completionTokens') AS SIGNED)), 0)").
 		Scan(&stats.OutputTokens)
 
 	// 平均响应时间（当前月）
@@ -196,12 +196,12 @@ func (s *StatsService) UpdateUserStats(user *model.UserModel) error {
 
 	// 使用子查询一次性获取总统计数据
 	allAgg := `
-		COUNT(*) as total_requests,
-		COALESCE(SUM(CAST(JSON_EXTRACT(all_usage, '$.total_tokens') AS SIGNED)), 0) as total_tokens,
+		COUNT(*) as TotalRequests,
+		COALESCE(SUM(CAST(JSON_EXTRACT(all_usage, '$.totalTokens') AS SIGNED)), 0) as TotalTokens,
 		(
 			SELECT COUNT(DISTINCT proj_id) FROM llm_log 
 			WHERE status = 'success' AND user_id = ? AND req_time >= ?
-		) as total_projects
+		) as TotalProjects
 	`
 	result := s.db.Model(&model.LlmLogModel{}).
 		Where("status = ? AND user_id = ? AND req_time >= ?", "success", user.ID, monthStart).
@@ -219,12 +219,12 @@ func (s *StatsService) UpdateUserStats(user *model.UserModel) error {
 
 	// 使用子查询一次性获取时间段统计数据
 	periodAgg := `
-		COUNT(*) as period_requests,
-		COALESCE(SUM(CAST(JSON_EXTRACT(all_usage, '$.total_tokens') AS SIGNED)), 0) as period_tokens,
+		COUNT(*) as PeriodRequests,
+		COALESCE(SUM(CAST(JSON_EXTRACT(all_usage, '$.totalTokens') AS SIGNED)), 0) as PeriodTokens,
 		(
 			SELECT COUNT(DISTINCT proj_id)  FROM llm_log
 			WHERE status = 'success' AND user_id = ? AND req_time >= ?
-		) as period_projects
+		) as PeriodProjects
 	`
 	result = s.db.Model(&model.LlmLogModel{}).
 		Where("status = 'success' AND user_id = ? AND req_time >= ?", user.ID, today).

@@ -10,24 +10,24 @@ import (
 type LlmLogModel struct {
 	ID uint64 `json:"id" gorm:"primarykey"`
 
-	UserID   uint64 `json:"user_id" gorm:"column:user_id;index;not null;default:0"`
-	ChatID   string `json:"chat_id" gorm:"column:chat_id;type:varchar(64);index"`
-	ProjID   string `json:"proj_id" gorm:"column:proj_id;type:varchar(64);index;"`
+	UserID   uint64 `json:"userId" gorm:"column:user_id;index;not null;default:0"`
+	ChatID   string `json:"chatId" gorm:"column:chat_id;type:varchar(64);index"`
+	ProjID   string `json:"projId" gorm:"column:proj_id;type:varchar(64);index;"`
 	TheModel string `json:"model" gorm:"column:model;type:varchar(64);not null"`
 	Provider string `json:"provider" gorm:"column:provider;type:varchar(64);not null"`
 
 	Messages any `json:"messages" gorm:"type:text;serializer:json"`
 	Response any `json:"response" gorm:"type:text;serializer:json"`
-	AllUsage any `json:"all_usage" gorm:"type:text;serializer:json"`
+	AllUsage any `json:"allUsage" gorm:"column:all_usage;type:text;serializer:json"`
 
 	Duration  int64  `json:"duration" gorm:"not null;default:0"`
 	Status    string `json:"status" gorm:"type:varchar(10);"`
-	ErrorMsg  string `json:"error_msg" gorm:"type:varchar(256);"`
-	ClientIP  string `json:"client_ip" gorm:"type:varchar(64);"`
-	UserAgent string `json:"user_agent" gorm:"type:varchar(256);not null"`
+	ErrorMsg  string `json:"errorMsg" gorm:"column:error_msg;type:varchar(256);"`
+	ClientIP  string `json:"clientIp" gorm:"column:client_ip;type:varchar(64);"`
+	UserAgent string `json:"userAgent" gorm:"column:user_agent;type:varchar(256);not null"`
 
 	// 添加请求时间字段，用于按月分区查询
-	ReqTime time.Time `json:"req_time" gorm:"column:req_time;index;"`
+	ReqTime time.Time `json:"reqTime" gorm:"column:req_time;index;"`
 
 	User UserModel `json:"user" gorm:"foreignKey:UserID"`
 
@@ -66,34 +66,39 @@ type ChatResponse struct {
 
 // ChatChoice 聊天选择结构
 type ChatChoice struct {
-	Index        int         `json:"index"`
-	Message      ChatMessage `json:"message"`
-	FinishReason string      `json:"finish_reason"`
+	Index   int         `json:"index"`
+	Message ChatMessage `json:"message"`
+
+	FinishReason string `json:"finish_reason"`
 }
 
 // Usage 使用情况结构
 type Usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
+	PromptTokens int `json:"promptTokens"`
+	TotalTokens  int `json:"totalTokens"`
+
+	CompletionTokens int `json:"completionTokens"`
 }
 
 // ChatStreamResponse 流式聊天响应结构
 type ChatStreamResponse struct {
-	ID      string             `json:"id"`
-	Object  string             `json:"object"`
-	Created int64              `json:"created"`
-	Model   string             `json:"model"`
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	Model   string `json:"model"`
+
+	Usage *Usage `json:"usage,omitempty"` // 添加Usage字段
+
 	Choices []ChatStreamChoice `json:"choices"`
-	Usage   *Usage             `json:"usage,omitempty"` // 添加Usage字段
 }
 
 // ChatStreamChoice 流式聊天选择结构
 type ChatStreamChoice struct {
-	Index        int             `json:"index"`
-	Delta        ChatStreamDelta `json:"delta"`
-	FinishReason *string         `json:"finish_reason"`
-	ToolCalls    []any           `json:"tool_calls,omitempty"`
+	Index        int     `json:"index"`
+	FinishReason *string `json:"finish_reason"`
+	ToolCalls    []any   `json:"tool_calls,omitempty"`
+
+	Delta ChatStreamDelta `json:"delta"`
 }
 
 // ChatStreamDelta 流式聊天增量结构

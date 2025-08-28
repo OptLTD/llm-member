@@ -39,7 +39,7 @@ const DataManager = {
   async loadAPIKeys() {
     try {
       const data = await Utils.apiRequest(`/api/api-keys`);
-      ProfileApp.apiKey = data.api_key;
+      ProfileApp.apiKey = data.apiKey;
       this.updateAPIKeysUI();
     } catch (error) {
       Utils.showNotification(error.message, "error");
@@ -54,7 +54,7 @@ const DataManager = {
 
     try {
       const data = await Utils.apiRequest(`/api/regenerate`, {});
-      ProfileApp.apiKey = data.api_key;
+      ProfileApp.apiKey = data.apiKey;
       this.updateAPIKeysUI();
       Utils.showNotification("API密钥重新生成成功", "success");
     } catch (error) {
@@ -80,7 +80,7 @@ const DataManager = {
   async subscribePlan(planId) {
     try {
       const data = await Utils.apiRequest(`/api/subscribe`, {
-        body: JSON.stringify({ plan_id: planId }),
+        body: JSON.stringify({ planId: planId }),
       });
       ProfileApp.user = data.user;
       this.updateProfileUI();
@@ -125,7 +125,7 @@ const DataManager = {
 
     const userPlanEl = document.getElementById("userPlan");
     if (userPlanEl) {
-      userPlanEl.textContent = this.getPlanName(user.user_plan);
+      userPlanEl.textContent = this.getPlanName(user.userPlan);
     }
 
     // 更新模态框用户信息
@@ -141,7 +141,7 @@ const DataManager = {
 
     const modalUserPlanEl = document.getElementById("modalUserPlan");
     if (modalUserPlanEl) {
-      modalUserPlanEl.textContent = this.getPlanName(user.pay_plan);
+      modalUserPlanEl.textContent = this.getPlanName(user.payPlan);
     }
 
     // 更新模态框表单字段
@@ -161,13 +161,13 @@ const DataManager = {
       "modalProfileCreatedAt"
     );
     if (modalProfileCreatedAtEl) {
-      modalProfileCreatedAtEl.value = Utils.formatDate(user.created_at);
+      modalProfileCreatedAtEl.value = Utils.formatDate(user.createdAt);
     }
 
     const modalProfileStatusEl = document.getElementById("modalProfileStatus");
     if (modalProfileStatusEl) {
-      modalProfileStatusEl.textContent = user.is_active ? "正常" : "已禁用";
-      modalProfileStatusEl.className = user.is_active
+      modalProfileStatusEl.textContent = user.isActive ? "正常" : "已禁用";
+      modalProfileStatusEl.className = user.isActive
         ? "inline-block bg-green-100 text-green-800 text-sm px-3 py-1 rounded-full"
         : "inline-block bg-red-100 text-red-800 text-sm px-3 py-1 rounded-full";
     }
@@ -185,13 +185,13 @@ const DataManager = {
 
     const profileCreatedAtEl = document.getElementById("profileCreatedAt");
     if (profileCreatedAtEl) {
-      profileCreatedAtEl.value = Utils.formatDate(user.created_at);
+      profileCreatedAtEl.value = Utils.formatDate(user.createdAt);
     }
 
     const profileStatusEl = document.getElementById("profileStatus");
     if (profileStatusEl) {
-      profileStatusEl.textContent = user.is_active ? "正常" : "已禁用";
-      profileStatusEl.className = user.is_active
+      profileStatusEl.textContent = user.isActive ? "正常" : "已禁用";
+      profileStatusEl.className = user.isActive
         ? "inline-block bg-green-100 text-green-800 text-sm px-3 py-1 rounded-full"
         : "inline-block bg-red-100 text-red-800 text-sm px-3 py-1 rounded-full";
     }
@@ -204,36 +204,36 @@ const DataManager = {
     const usage = ProfileApp.usage;
     const limit = ProfileApp.limit;
     document.getElementById("totalRequests").textContent = Utils.formatNumber(
-      usage.total_requests || 0
+      usage.totalRequests || 0
     );
     document.getElementById("totalTokens").textContent = Utils.formatNumber(
-      usage.total_tokens || 0
+      usage.totalTokens || 0
     );
-    const planName = this.getPlanName(ProfileApp.user?.user_plan || 'basic');
+    const planName = this.getPlanName(ProfileApp.user?.userPlan || 'basic');
     document.getElementById("currentPlan").textContent = planName;
 
     // 更新进度条（这里需要实际的当日/当月使用数据）
     let dailyUsed, totalUsed, dailyLimit, totalLimit;
-    switch (limit?.limit_method) {
+    switch (limit?.limitMethod) {
       case "tokens": {
-        dailyUsed = usage.today_tokens || 0;
-        totalUsed = usage.total_tokens || 0;
-        dailyLimit = limit.daily_tokens || 0;
-        totalLimit = limit.monthly_tokens || 0;
+        dailyUsed = usage.todayTokens || 0;
+        totalUsed = usage.totalTokens || 0;
+        dailyLimit = limit.dailyTokens || 0;
+        totalLimit = limit.monthlyTokens || 0;
         break
       }
       case "requests": {
-        dailyUsed = usage.today_requests || 0;
-        totalUsed = usage.total_requests || 0;
-        dailyLimit = limit.daily_requests || 0;
-        totalLimit = limit.monthly_requests || 0;
+        dailyUsed = usage.todayRequests || 0;
+        totalUsed = usage.totalRequests || 0;
+        dailyLimit = limit.dailyRequests || 0;
+        totalLimit = limit.monthlyRequests || 0;
         break
       }
       case "projects": {
-        dailyUsed = usage.today_projects || 0;
-        totalUsed = usage.total_projects || 0;
-        dailyLimit = limit.daily_projects || 0;
-        totalLimit = limit.monthly_projects || 0;
+        dailyUsed = usage.todayProjects || 0;
+        totalUsed = usage.totalProjects || 0;
+        dailyLimit = limit.dailyProjects || 0;
+        totalLimit = limit.monthlyProjects || 0;
         break
       }
     }
@@ -259,7 +259,7 @@ const DataManager = {
   updateBillingUI(upgradeOptions, plans) {
     if (!plans || !ProfileApp.user) return;
 
-    const currentPlan = ProfileApp.user.user_plan;
+    const currentPlan = ProfileApp.user.userPlan;
     const currentPlanData = plans.find(
       (p) => p.plan === currentPlan
     );
@@ -300,10 +300,10 @@ const DataManager = {
       const statusText = this.getOrderStatusText(order.status);
       row.innerHTML = `
           <td class="px-6 py-4 font-medium text-gray-900">${
-            order.order_id
+            order.orderId
           }</td>
           <td class="px-6 py-4 text-gray-900">${this.getPlanName(
-            order.pay_plan
+            order.payPlan
           )}</td>
           <td class="px-6 py-4 text-gray-900">¥${order.amount}</td>
           <td class="px-6 py-4">
@@ -312,7 +312,7 @@ const DataManager = {
               </span>
           </td>
           <td class="px-6 py-4 text-gray-500">${Utils.formatDate(
-            order.succeed_at
+            order.succeedAt
           )}</td>
       `;
       orderHistory.appendChild(row);

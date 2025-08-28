@@ -333,7 +333,7 @@ class PaymentManager {
 
     try {
       const paymentData = {
-        pay_plan: this.selectedPlan.plan,
+        payPlan: this.selectedPlan.plan,
         amount: this.selectedPlan.price,
         method: this.selectedPaymentMethod.method,
       };
@@ -347,13 +347,13 @@ class PaymentManager {
         body: JSON.stringify(paymentData),
       });
 
-      if (data && data.order_id) {
+      if (data && data.orderId) {
         var qrcode = await this.loadImage(data.qrcode);
-        this.currentOrderId = data.order_id;
+        this.currentOrderId = data.orderId;
         this.showPaymentQR(qrcode);
         this.startPaymentCheck(data);
       } else if (data.error && data.plan) {
-        this.showHasActivePlan(data.plan, data.expire_at);
+        this.showHasActivePlan(data.plan, data.expireAt);
       } else {
         this.showPaymentError(data.error || "创建支付订单失败");
       }
@@ -424,7 +424,7 @@ class PaymentManager {
     this.stopPaymentCheck();
   }
 
-  showHasActivePlan(name, expire_at) {
+  showHasActivePlan(name, expireAt) {
     // 隐藏其他支付相关元素
     document.getElementById("paymentLoading").classList.add("hidden");
     document.getElementById("paymentQR").classList.add("hidden");
@@ -432,7 +432,7 @@ class PaymentManager {
     document.getElementById("paymentError").classList.add("hidden");
 
     // 格式化过期时间
-    const expireDate = new Date(expire_at);
+    const expireDate = new Date(expireAt);
     const formattedDate = expireDate.toLocaleDateString("zh-CN", {
       year: "numeric",
       month: "2-digit",

@@ -143,11 +143,11 @@ class MemberManager {
         method: "POST",
         body: JSON.stringify({
           username, email, password,
-          request_limit: requestLimit,
-          user_role: isAdmin ? 'admin': 'user',
+          requestLimit: requestLimit,
+          userRole: isAdmin ? 'admin': 'user',
         }),
       });
-      successDiv.textContent = `用户创建成功！API Key: ${data.api_key}`;
+      successDiv.textContent = `用户创建成功！API Key: ${data.apiKey}`;
       successDiv.classList.remove("hidden");
       errorDiv.classList.add("hidden");
 
@@ -245,46 +245,46 @@ class MemberManager {
                   ${this.app.escapeHtml(user.email || '')}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-600">
-                  <span class="truncate block w-32" title="${this.app.escapeHtml(user.api_key || '')}">
-                    ${user.api_key ? user.api_key.substring(0, 20) + '...' : ''}
+                  <span class="truncate block w-32" title="${this.app.escapeHtml(user.apiKey || '')}">
+          ${user.apiKey ? user.apiKey.substring(0, 20) + '...' : ''}
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    user.is_active
+                    user.isActive
                       ? "bg-green-100 text-green-800"
                       : "bg-red-100 text-red-800"
                   }">
-                    ${user.is_active ? "活跃" : "禁用"}
+                    ${user.isActive ? "活跃" : "禁用"}
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    user.user_role == 'admin'
+                    user.userRole == 'admin'
                       ? "bg-purple-100 text-purple-800"
                       : "bg-gray-100 text-gray-800"
                   }">
-                    ${user.user_role == 'admin' ? "管理员" : "普通用户"}
+                    ${user.userRole == 'admin' ? "管理员" : "普通用户"}
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  ${user.total_requests || 0} / ${user.request_limit || 0}
+                  ${user.totalRequests || 0} / ${user.requestLimit || 0}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  ${this.formatDateTime(user.created_at)}
+                  ${this.formatDateTime(user.CreatedAt)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <button onclick="app.memberManager.regenerateAPIKey(${user.id})" 
                     class="text-blue-600 hover:text-blue-900 mr-3">
                     <i class="fas fa-key"></i> 重新生成Key
                   </button>
-                  <button onclick="app.memberManager.toggleUserStatus(${user.id}, ${!user.is_active})" 
+                  <button onclick="app.memberManager.toggleUserStatus(${user.id}, ${!user.isActive})" 
                     class="${
-                      user.is_active
+                      user.isActive
                         ? "text-red-600 hover:text-red-900"
                         : "text-green-600 hover:text-green-900"
                     }">
-                    <i class="fas fa-${user.is_active ? 'ban' : 'check'}"></i> ${user.is_active ? "禁用" : "启用"}
+                    <i class="fas fa-${user.isActive ? 'ban' : 'check'}"></i> ${user.isActive ? "禁用" : "启用"}
                   </button>
                 </td>
               </tr>
@@ -379,7 +379,7 @@ class MemberManager {
     try {
       const url = `/api/admin/users/${userId}/generate`;
       const data = await this.app.apiCall(url, { method: "POST" });
-      this.app.showAlert(`新的 API Key: ${data.api_key}`, "success");
+      this.app.showAlert(`新的 API Key: ${data.apiKey}`, "success");
       this.loadUsersPage();
     } catch (error) {
       if (error.message !== "Unauthorized") {
@@ -397,7 +397,7 @@ class MemberManager {
     try {
       await this.app.apiCall(`/api/admin/users/${userId}/toggle`, {
         method: "POST",
-        body: JSON.stringify({ is_active: enable }),
+        body: JSON.stringify({ isActive: enable }),
       });
 
       this.app.showAlert(`用户${action}成功`, "success");

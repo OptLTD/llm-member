@@ -278,8 +278,8 @@ func (h *AuthHandle) BuildCallbackToken(c *gin.Context) {
 	}
 
 	// 获取AUTH_CALLBACK配置
-	callback_url := config.GetAuthCallback()
-	if callback_url == "" {
+	callbackUrl := config.GetAuthCallback()
+	if callbackUrl == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "未配置AUTH_CALLBACK"})
 		return
 	}
@@ -287,13 +287,13 @@ func (h *AuthHandle) BuildCallbackToken(c *gin.Context) {
 	// 构建回调URL
 	callbackURL := fmt.Sprintf(
 		"%s?token=%s&sign=%s&time=%s",
-		callback_url, token, sign, timestamp,
+		callbackUrl, token, sign, timestamp,
 	)
 
 	c.JSON(http.StatusOK, gin.H{
 		"time":  timestamp,
 		"token": token, "sign": sign,
-		"callback_url": callbackURL,
+		"callbackUrl": callbackURL,
 	})
 }
 

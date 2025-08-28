@@ -114,7 +114,7 @@ class TestChatManager {
           body: JSON.stringify({
             model: model,
             messages: [{ role: "user", content: message }],
-            temperature: temperature, max_tokens: maxTokens,
+            temperature: temperature, maxTokens: maxTokens,
           }),
         });
 
@@ -159,12 +159,12 @@ class TestChatManager {
           </div>
           <div>
               <span class="font-medium">Token 使用:</span> ${
-                data.usage?.total_tokens || "N/A"
+                data.usage?.totalTokens || "N/A"
               }
           </div>
           <div>
               <span class="font-medium">完成原因:</span> ${
-                data.choices?.[0]?.finish_reason || "N/A"
+                data.choices?.[0]?.finishReason || "N/A"
               }
           </div>
       </div>
@@ -236,7 +236,7 @@ class TestChatManager {
           model: model,
           messages: [{ role: "user", content: message }],
           temperature: temperature,
-          max_tokens: maxTokens,
+          maxTokens: maxTokens,
           stream: true,
         }),
       });
@@ -270,7 +270,7 @@ class TestChatManager {
                 try {
                   const url = `/api/admin/usage?msgId=${streamMsgId}`
                   const usage = await this.app.apiCall(url, {});
-                  this.updateStreamStats(model, duration, usage.total_tokens, "stop");
+                  this.updateStreamStats(model, duration, usage.totalTokens, "stop");
                 } catch (err) {
                   console.error('loadStreamChatUsage error', err);
                 }

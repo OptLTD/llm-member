@@ -184,7 +184,7 @@ class LlmLogsManager {
             ${logs.map(log => `
               <tr class="hover:bg-gray-50">
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  ${this.formatDateTime(log.req_time)}
+                  ${this.formatDateTime(log.reqTime)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   ${this.app.escapeHtml(log.model || '')}
@@ -196,22 +196,22 @@ class LlmLogsManager {
                   ${this.getLogStatusBadge(log.status)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  ${log.all_usage?.prompt_tokens || 0} +
-                  ${log.all_usage?.completion_tokens || 0} =
-                  ${log.all_usage?.total_tokens || 0}
+                  ${log.allUsage?.promptTokens || 0} +
+                  ${log.allUsage?.completionTokens || 0} =
+                  ${log.allUsage?.totalTokens || 0}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   ${log.duration || 0}ms
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  ${this.app.escapeHtml(log.client_ip || '')}
+                  ${this.app.escapeHtml(log.clientIp || '')}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <button onclick="app.llmLogsManager.viewLogDetails(${log.id})" 
                     class="text-blue-600 hover:text-blue-900 mr-3">
                     <i class="fas fa-eye"></i> 详情
                   </button>
-                  ${log.error_msg ? `
+                  ${log.errorMsg ? `
                     <button onclick="app.llmLogsManager.viewLogError(${log.id})" 
                       class="text-red-600 hover:text-red-900">
                       <i class="fas fa-exclamation-triangle"></i> 错误

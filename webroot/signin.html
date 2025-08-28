@@ -392,8 +392,8 @@
                         'Content-Type': 'application/json'
                     }
                 });
-                if (data.callback_url) { // 跳转到回调URL
-                    window.location.href = data.callback_url;
+                if (data.callbackUrl) { // 跳转到回调URL
+                    window.location.href = data.callbackUrl;
                 } else {
                     Utils.showNotification(data.error || '生成token失败', 'error');
                 }

@@ -22,7 +22,7 @@ type PlanInfo struct {
 
 // OrderRequest 支付请求
 type OrderRequest struct {
-	PayPlan PayPlan `json:"pay_plan" binding:"required"`
+	PayPlan PayPlan `json:"payPlan" binding:"required"`
 	Method  method  `json:"method" binding:"required"`
 
 	Amount *float64 `json:"amount,omitempty"` // 基础版可自定义金额
@@ -31,8 +31,8 @@ type OrderRequest struct {
 
 // OrderResponse 支付响应
 type OrderResponse struct {
-	OrderID string  `json:"order_id"`
-	PayURL  string  `json:"pay_url"`
+	OrderID string  `json:"orderId"`
+	PayURL  string  `json:"payUrl"`
 	Amount  float64 `json:"amount"`
 	QRCode  string  `json:"qrcode"`
 	Status  string  `json:"status"`
@@ -43,20 +43,20 @@ type OrderResponse struct {
 type OrderModel struct {
 	ID uint64 `json:"id" gorm:"primarykey"`
 
-	UserID  uint64  `json:"user_id" gorm:"index;not null"`
-	OrderID string  `json:"order_id" gorm:"type:varchar(64);uniqueIndex;not null"`
-	PayPlan PayPlan `json:"pay_plan" gorm:"type:varchar(20)"`
-	Amount  float64 `json:"amount" gorm:"not null"`
-	Method  method  `json:"method" gorm:"type:varchar(20)"`
-	PayURL  string  `json:"payurl"`
-	QRCode  string  `json:"qrcode"`
+	UserID  uint64  `json:"userId" gorm:"column:user_id;index;not null"`
+	OrderID string  `json:"orderId" gorm:"column:order_id;type:varchar(64);uniqueIndex;not null"`
+	PayPlan PayPlan `json:"payPlan" gorm:"column:pay_plan;type:varchar(20)"`
+	Amount  float64 `json:"amount" gorm:"column:amount;type:double;not null"`
+	Method  method  `json:"method" gorm:"column:method;type:varchar(20)"`
+	PayURL  string  `json:"payurl" gorm:"column:pay_url;type:text"`
+	QRCode  string  `json:"qrcode" gorm:"column:qrcode;type:text"`
 
-	SucceedAt *time.Time `json:"succeed_at"`
-	ExpiredAt time.Time  `json:"expired_at"`
+	SucceedAt *time.Time `json:"succeedAt" gorm:"column:succeed_at"`
+	ExpiredAt time.Time  `json:"expiredAt" gorm:"column:expired_at"`
 
-	Status OrderStatus `json:"status"` // pending, success, failed, canceled
+	Status OrderStatus `json:"status" gorm:"column:status;type:varchar(10)"` // pending, success, failed, canceled
 
-	User UserModel `json:"user" gorm:"foreignKey:UserID"`
+	User UserModel `json:"user" gorm:"column:user_id;foreignKey:UserID"`
 
 	gorm.Model
 }
@@ -68,10 +68,10 @@ func (m OrderModel) TableName() string {
 type VerifyModel struct {
 	ID uint64 `json:"id" gorm:"primarykey"`
 
-	Email string `json:"email" gorm:"index"`
-	Token string `json:"token" gorm:"type:varchar(64)"`
+	Email string `json:"email" gorm:"column:email;index"`
+	Token string `json:"token" gorm:"column:token;type:varchar(64)"`
 
-	ExpireAt time.Time `json:"expire_at"`
+	ExpireAt time.Time `json:"expireAt"  gorm:"column:expire_at"`
 	gorm.Model
 }
 

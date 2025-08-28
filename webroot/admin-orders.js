@@ -147,19 +147,19 @@ class OrdersManager {
                   <div class="text-sm text-gray-500">${this.app.escapeHtml(order.email || '')}</div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  ${this.app.escapeHtml(order.plan_name || '')}
+                  ${this.app.escapeHtml(order.planName || '')}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   ¥${(order.amount || 0).toFixed(2)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                  ${this.getPaymentMethodBadge(order.payment_method)}
+                  ${this.getPaymentMethodBadge(order.paymentMethod)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   ${this.getOrderStatusBadge(order.status)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  ${this.formatDateTime(order.created_at)}
+                  ${this.formatDateTime(order.createdAt)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <button onclick="app.ordersManager.viewOrderDetails('${order.id}')" 

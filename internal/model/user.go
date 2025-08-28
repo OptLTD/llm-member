@@ -12,27 +12,20 @@ import (
 type UserModel struct {
 	ID uint64 `json:"id" gorm:"primarykey"`
 
+	Avatar   string `json:"avatar" gorm:"column:avatar;type:varchar(256)"`
 	Email    string `json:"email" gorm:"type:varchar(256);index;not null"`
 	Username string `json:"username" gorm:"type:varchar(128);index;not null"`
-	Password string `json:"password" gorm:"type:varchar(64);not null"` // 不在 JSON 中返回密码
-	APIKey   string `json:"api_key" gorm:"type:varchar(68);index;not null"`
-	IsActive bool   `json:"is_active" gorm:"default:true"`
-	Verified bool   `json:"verified" gorm:"default:false"`
-	UserRole Role   `json:"user_role" gorm:"default:user"`
+	Password string `json:"password" gorm:"type:varchar(64);not null"`
+	APIKey   string `json:"apiKey" gorm:"column:api_key;type:varchar(68);index"`
+	IsActive bool   `json:"isActive" gorm:"column:is_active;default:true"`
+	Verified bool   `json:"verified" gorm:"column:verified;default:false"`
+	UserRole Role   `json:"userRole" gorm:"column:user_role;default:user"`
 
 	// 当前套餐、过期时间
-	ExpireAt *time.Time `json:"expire_at" gorm:"default:null"`     // 过期时间
-	UserPlan PayPlan    `json:"user_plan" gorm:"type:varchar(20)"` // 用户套餐
-	ApiUsage *ApiUsage  `json:"api_usage" gorm:"type:text;serializer:json"`
-	ApiLimit *ApiLimit  `json:"api_limit" gorm:"type:text;serializer:json"`
-
-	// 使用统计
-	// TotalTokens   int64 `json:"total_tokens" gorm:"default:0"`
-	// TotalRequests int64 `json:"total_requests" gorm:"default:0"`
-
-	// // 限制设置
-	// DailyLimit   int64 `json:"daily_limit" gorm:"default:1000"`    // 每日请求限制
-	// MonthlyLimit int64 `json:"monthly_limit" gorm:"default:10000"` // 每月请求限制
+	ExpireAt *time.Time `json:"expireAt" gorm:"column:expire_at;default:null"`     // 过期时间
+	UserPlan PayPlan    `json:"userPlan" gorm:"column:user_plan;type:varchar(20)"` // 用户套餐
+	ApiUsage *ApiUsage  `json:"apiUsage" gorm:"column:api_usage;serializer:json"`
+	ApiLimit *ApiLimit  `json:"apiLimit" gorm:"column:api_limit;serializer:json"`
 
 	gorm.Model
 }
@@ -58,7 +51,7 @@ type SignUpRequest struct {
 // SignUpResponse 注册响应
 type SignUpResponse struct {
 	User    *UserModel `json:"user"`
-	APIKey  string     `json:"api_key"`
+	APIKey  string     `json:"apiKey"`
 	Message string     `json:"message"`
 }
 
@@ -77,39 +70,41 @@ type SignInResponse struct {
 
 // UpdateUserRequest 更新用户请求
 type UpdateUserRequest struct {
-	UserId uint64 `json:"user_id,omitempty"`
+	UserId uint64 `json:"userId,omitempty"`
 	Email  string `json:"email,omitempty"`
 	Phone  string `json:"phone,omitempty"`
 
-	IsActive *bool    `json:"is_active,omitempty"`
-	UserPlan *PayPlan `json:"user_plan,omitempty"`
+	IsActive *bool    `json:"isActive,omitempty"`
+	UserPlan *PayPlan `json:"userPlan,omitempty"`
 
-	DailyLimit   *int64 `json:"daily_limit,omitempty"`
-	MonthlyLimit *int64 `json:"monthly_limit,omitempty"`
+	DailyLimit   *int64 `json:"dailyLimit,omitempty"`
+	MonthlyLimit *int64 `json:"monthlyLimit,omitempty"`
 }
 
 // UserResponse 用户信息响应
 type UserResponse struct {
 	Email    string `json:"email"`
-	APIKey   string `json:"api_key"`
+	Avatar   string `json:"avatar"`
+	APIKey   string `json:"apiKey"`
 	Username string `json:"username"`
-	IsActive bool   `json:"is_active"`
+	IsActive bool   `json:"isActive"`
 	Verified bool   `json:"verified"`
-	UserRole Role   `json:"user_role"`
+	UserRole Role   `json:"userRole"`
 
-	UserPlan PayPlan    `json:"user_plan"`
-	ExpireAt *time.Time `json:"expire_at"`
-	ApiUsage *ApiUsage  `json:"api_usage"`
-	ApiLimit *ApiLimit  `json:"api_limit"`
+	UserPlan PayPlan    `json:"userPlan"`
+	ExpireAt *time.Time `json:"expireAt"`
+	ApiUsage *ApiUsage  `json:"apiUsage"`
+	ApiLimit *ApiLimit  `json:"apiLimit"`
 
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // ToUserResponse 将UserModel转换为UserResponse
 func (u *UserModel) ToUserResponse() *UserResponse {
 	return &UserResponse{
 		Email:     u.Email,
+		Avatar:    u.Avatar,
 		APIKey:    u.APIKey,
 		Username:  u.Username,
 		IsActive:  u.IsActive,
@@ -130,11 +125,11 @@ type StatsResponse struct {
 	InputTokens      int64            `json:"inputTokens"`
 	OutputTokens     int64            `json:"outputTokens"`
 	SuccessRate      float64          `json:"successRate"`
-	AvgDuration      float64          `json:"avg_duration"`
+	AvgDuration      float64          `json:"avgDuration"`
 	ModelUsage       map[string]int64 `json:"modelUsage"`
 	ProviderUsage    map[string]int64 `json:"providerUsage"`
-	RequestsToday    int64            `json:"requests_today"`
-	RequestsThisWeek int64            `json:"requests_this_week"`
+	RequestsToday    int64            `json:"requestsToday"`
+	RequestsThisWeek int64            `json:"requestsThisWeek"`
 
 	// 会员统计
 	TotalMembers          int64 `json:"totalMembers"`
@@ -154,28 +149,28 @@ type StatsResponse struct {
 }
 
 type ApiUsage struct {
-	TotalTokens   uint64 `json:"total_tokens"`
-	TotalRequests uint64 `json:"total_requests"`
-	TotalProjects uint64 `json:"total_projects"`
+	TotalTokens   uint64 `json:"totalTokens"`
+	TotalRequests uint64 `json:"totalRequests"`
+	TotalProjects uint64 `json:"totalProjects"`
 
-	TodayTokens   uint64 `json:"today_tokens"`
-	TodayRequests uint64 `json:"today_requests"`
-	TodayProjects uint64 `json:"today_projects"`
+	TodayTokens   uint64 `json:"todayTokens"`
+	TodayRequests uint64 `json:"todayRequests"`
+	TodayProjects uint64 `json:"todayProjects"`
 }
 type ApiLimit struct {
-	// 有效期
-	ExpireDays int `json:"expire_days,omitempty"`
-	// CurrentPlan PayPlan `json:"current_plan,omitempty"`
-	LimitMethod string `json:"limit_method,omitempty"`
+	// 过期天数
+	ExpireDays int `json:"expireDays,omitempty"`
+	// 限制方法：tokens, requests, projects
+	LimitMethod string `json:"limitMethod,omitempty"`
 
-	DailyTokens   uint64 `json:"daily_tokens,omitempty"`
-	MonthlyTokens uint64 `json:"monthly_tokens,omitempty"`
+	DailyTokens   uint64 `json:"dailyTokens,omitempty"`
+	MonthlyTokens uint64 `json:"monthlyTokens,omitempty"`
 
-	DailyRequests   uint64 `json:"daily_requests,omitempty"`
-	MonthlyRequests uint64 `json:"monthly_requests,omitempty"`
+	DailyRequests   uint64 `json:"dailyRequests,omitempty"`
+	MonthlyRequests uint64 `json:"monthlyRequests,omitempty"`
 
-	DailyProjects   uint64 `json:"daily_projects,omitempty"`
-	MonthlyProjects uint64 `json:"monthly_projects,omitempty"`
+	DailyProjects   uint64 `json:"dailyProjects,omitempty"`
+	MonthlyProjects uint64 `json:"monthlyProjects,omitempty"`
 }
 
 // Value implements driver.Valuer interface for ApiUsage

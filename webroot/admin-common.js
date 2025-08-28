@@ -147,7 +147,7 @@ class LLMMemberApp {
     try {
       const resp = await this.apiCall("/api/admin/current");
       if (resp && resp.user) {
-        this.apiKey = resp.user.api_key;
+        this.apiKey = resp.user.apiKey;
         localStorage.setItem("apiKey", this.apiKey);
       }
     } catch (error) {

@@ -52,7 +52,7 @@
 fetch('/v1/chat/completions', {
   method: 'POST',
   headers: {
-    'Authorization': 'Bearer user_token',
+    'Authorization': `Bearer ${apiToken}`,
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
@@ -134,9 +134,9 @@ const resp = fetch(`https://your-domain.com/v1/verify-token`, {
 {
   "email": "user@example.com",
   "username": "User Name",
-  "user_plan": "basic",
-  "api_token": "sk-xxxxxxxxxxxxxxxx",
-  "expire_at": "2023-12-31T23:59:59Z"
+  "userPlan": "basic",
+  "apiToken": "sk-xxxxxxxxxxxxxxxx",
+  "expireAt": "2023-12-31T23:59:59Z"
 }
 ```
 
@@ -150,7 +150,7 @@ Base Url：`https://your-domain.com/v1`
 fetch(`${baseURL}/chat/completions`, {
   method: 'POST',
   headers: {
-    'Authorization': `Bearer ${api_token}`,
+    'Authorization': `Bearer ${apiToken}`,
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
@@ -169,7 +169,7 @@ fetch(`${baseURL}/chat/completions`, {
 const resp = fetch(`https://your-domain.com/v1/user-profile`, {
   method: 'GET',
   headers: {
-    'Authorization': `Bearer ${api_token}`,
+    'Authorization': `Bearer ${apiToken}`,
     'Content-Type': 'application/json'
   },
 })
@@ -179,8 +179,8 @@ const resp = fetch(`https://your-domain.com/v1/user-profile`, {
 {
   "email": "user@example.com",
   "username": "User Name",
-  "user_plan": "basic",
-  "expire_at": "2023-12-31T23:59:59Z"
+  "userPlan": "basic",
+  "expireAt": "2023-12-31T23:59:59Z"
 }
 ```
 
@@ -190,7 +190,7 @@ const resp = fetch(`https://your-domain.com/v1/user-profile`, {
 cosnt resp = fetch(`https://your-domain.com/api/usage`, {
   method: 'GET',
   headers: {
-    'Authorization': 'Bearer user_token',
+    'Authorization': `Bearer ${apiToken}`,
     'Content-Type': 'application/json'
   },
 })
@@ -200,8 +200,8 @@ cosnt resp = fetch(`https://your-domain.com/api/usage`, {
 {
   "email": "user@example.com",
   "username": "User Name",
-  "user_plan": "basic",
-  "expire_at": "2023-12-31T23:59:59Z"
+  "userPlan": "basic",
+  "expireAt": "2023-12-31T23:59:59Z"
 }
 ```
 
