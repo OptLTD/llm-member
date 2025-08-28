@@ -34,16 +34,24 @@ func NewRelayService() *RelayService {
 }
 
 func (s *RelayService) ChatCompletions(ctx context.Context, req *model.ChatRequest) (*model.ChatResponse, error) {
-	provider := s.getProvider(req.Model)
-	apiConfig := s.getAPIConfig(provider)
-
-	if apiConfig == nil {
+	var provider = s.getProvider(req.Model)
+	if req.Model == "" || strings.HasPrefix(req.Model, "auto") {
+		if models := s.GetModels(); len(models) > 0 {
+			m := models[0]
+			req.Model = m.Name
+			provider = m.Provider
+		}
+	}
+	if provider == "unknown" || provider == "unsupport" {
 		return nil, fmt.Errorf("unsupported model: %s", req.Model)
 	}
-	if apiConfig.Compatible {
+	if apiConfig := s.getAPIConfig(provider); apiConfig == nil {
+		return nil, fmt.Errorf("provider %s not configured", provider)
+	} else if apiConfig.Compatible {
 		return s.callWithClient(ctx, req, apiConfig)
+	} else {
+		return s.callWithHTTP(ctx, req, apiConfig)
 	}
-	return s.callWithHTTP(ctx, req, apiConfig)
 }
 
 func (s *RelayService) GetModels() []model.LLModelInfo {
@@ -366,15 +374,11 @@ func (s *RelayService) ChatCompletionsStream(ctx context.Context, req *model.Cha
 		defer close(errorChan)
 
 		// 获取提供商
-		provider := s.getProvider(req.Model)
-		if provider == "unknown" {
+		var apiConfig *APIConfig
+		if provider := s.getProvider(req.Model); provider == "unknown" {
 			errorChan <- fmt.Errorf("unsupported model: %s", req.Model)
 			return
-		}
-
-		// 获取 API 配置
-		apiConfig := s.getAPIConfig(provider)
-		if apiConfig == nil {
+		} else if apiConfig = s.getAPIConfig(provider); apiConfig == nil {
 			errorChan <- fmt.Errorf("provider %s not configured", provider)
 			return
 		}

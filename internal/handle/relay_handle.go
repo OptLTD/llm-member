@@ -69,12 +69,11 @@ func (h *RelayHandle) ChatCompletions(c *gin.Context) {
 		duration := time.Since(startTime).Milliseconds()
 		provider := h.getProviderFromModel(req.Model)
 		logEntry := &model.LlmLogModel{
-			ChatID: resp.ID, UserID: userInfo.ID,
+			UserID: userInfo.ID, Duration: duration,
 			Provider: provider, TheModel: req.Model,
 			Messages: req.Messages, Response: resp,
-			AllUsage: resp.Usage, Duration: duration,
 			ReqTime: time.Now(), ClientIP: c.ClientIP(),
-			UserAgent: c.GetHeader("user-agent"),
+			UserAgent: c.GetHeader("User-Agent"),
 		}
 		if c.GetHeader("X-Project-Id") != "" {
 			logEntry.ProjID = c.GetHeader("X-Project-Id")
@@ -84,6 +83,8 @@ func (h *RelayHandle) ChatCompletions(c *gin.Context) {
 			logEntry.ErrorMsg = err.Error()
 		} else {
 			logEntry.Status = "success"
+			logEntry.ChatID = resp.ID
+			logEntry.AllUsage = resp.Usage
 		}
 		if err := h.logService.CreateLog(logEntry); err == nil {
 			h.statsService.UpdateUserStats(userInfo)
