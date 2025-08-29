@@ -67,7 +67,7 @@ func (h *RelayHandle) ChatCompletions(c *gin.Context) {
 	// 创建通用的日志记录
 	finishCallback := func(err error, resp *model.ChatResponse) {
 		duration := time.Since(startTime).Milliseconds()
-		provider := h.getProviderFromModel(req.Model)
+		provider := h.relayService.GetProvider(req.Model)
 		logEntry := &model.LlmLogModel{
 			UserID: userInfo.ID, Duration: duration,
 			Provider: provider, TheModel: req.Model,
@@ -216,35 +216,5 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 			logAndFinish(streamErr)
 			return
 		}
-	}
-}
-
-func (h *RelayHandle) getProviderFromModel(model string) string {
-	if model == "" {
-		return "unknown"
-	}
-
-	switch {
-	case strings.HasPrefix(model, "gpt-"):
-		return "openai"
-	case strings.HasPrefix(model, "claude-"):
-		return "claude"
-	case strings.HasPrefix(model, "qwen-") || strings.HasPrefix(model, "qwen2"):
-		return "qwen"
-	case strings.HasPrefix(model, "doubao-"):
-		return "doubao"
-	case strings.HasPrefix(model, "glm-"):
-		return "bigmodel"
-	case strings.HasPrefix(model, "grok-"):
-		return "grok"
-	case strings.HasPrefix(model, "gemini-"):
-		return "gemini"
-	case strings.Contains(model, "/"):
-		// OpenRouter 模型格式: provider/model
-		return "openrouter"
-	case strings.HasPrefix(model, "Qwen") || strings.HasPrefix(model, "deepseek"):
-		return "siliconflow"
-	default:
-		return "unknown"
 	}
 }

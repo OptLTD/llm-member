@@ -40,7 +40,7 @@ func (m LlmLogModel) TableName() string {
 
 // ChatRequest 聊天请求结构
 type ChatRequest struct {
-	Model       string        `json:"model" binding:"required"`
+	Model       string        `json:"model" binding:""`
 	Messages    []ChatMessage `json:"messages" binding:"required"`
 	Temperature *float32      `json:"temperature,omitempty"`
 	MaxTokens   *int          `json:"max_tokens,omitempty"`

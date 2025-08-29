@@ -23,7 +23,10 @@ type APIConfig struct {
 	BaseURL string
 	APIKey  string
 
-	Compatible bool // 是否使用 OpenAI 客户端
+	Provider string
+	ReqModel string
+
+	Compatible bool
 }
 
 type RelayService struct {
@@ -34,24 +37,77 @@ func NewRelayService() *RelayService {
 }
 
 func (s *RelayService) ChatCompletions(ctx context.Context, req *model.ChatRequest) (*model.ChatResponse, error) {
-	var provider = s.getProvider(req.Model)
-	if req.Model == "" || strings.HasPrefix(req.Model, "auto") {
-		if models := s.GetModels(); len(models) > 0 {
-			m := models[0]
-			req.Model = m.Name
-			provider = m.Provider
-		}
+	apiConfig, err := s.GetAPIConfig(req.Model)
+	if err != nil {
+		return nil, err
 	}
-	if provider == "unknown" || provider == "unsupport" {
-		return nil, fmt.Errorf("unsupported model: %s", req.Model)
+	if req.Model == "" || req.Model == "auto-match" {
+		req.Model = apiConfig.ReqModel
 	}
-	if apiConfig := s.getAPIConfig(provider); apiConfig == nil {
-		return nil, fmt.Errorf("provider %s not configured", provider)
-	} else if apiConfig.Compatible {
+	if apiConfig.Compatible {
 		return s.callWithClient(ctx, req, apiConfig)
 	} else {
 		return s.callWithHTTP(ctx, req, apiConfig)
 	}
+}
+
+// ChatCompletionsStream 流式聊天完成
+func (s *RelayService) ChatCompletionsStream(ctx context.Context, req *model.ChatRequest) (<-chan *model.ChatStreamResponse, <-chan error) {
+	respChan := make(chan *model.ChatStreamResponse, 100)
+	errorChan := make(chan error, 1)
+
+	go func() {
+		defer close(respChan)
+		defer close(errorChan)
+
+		apiConfig, err := s.GetAPIConfig(req.Model)
+		if err != nil {
+			errorChan <- err
+			return
+		}
+
+		if req.Model == "" || req.Model == "auto-match" {
+			req.Model = apiConfig.ReqModel
+		}
+		if apiConfig.Compatible {
+			s.streamWithClient(ctx, req, apiConfig, respChan, errorChan)
+		} else {
+			s.streamWithHTTP(ctx, req, apiConfig, respChan, errorChan)
+		}
+	}()
+
+	return respChan, errorChan
+}
+
+func (s *RelayService) GetAPIConfig(model string) (*APIConfig, error) {
+	apiConfig := &APIConfig{Compatible: true}
+	apiConfig.Provider = s.GetProvider(model)
+	if model == "" || model == "auto-match" {
+		if models := s.GetModels(); len(models) > 0 {
+			provider := models[0].Provider
+			apiConfig.Provider = provider
+			apiConfig.ReqModel = models[0].ID
+		}
+	}
+	if apiConfig.Provider == "unknown" {
+		return nil, fmt.Errorf("unsupported model: %s", model)
+	}
+
+	if provider := config.GetProvider(apiConfig.Provider); provider == nil {
+		fmt.Printf("[LLM] Provider %s not found in config\n", provider)
+		return nil, fmt.Errorf("provider %s not configured", provider)
+	} else {
+		apiConfig.APIKey = provider.APIKey
+		apiConfig.BaseURL = provider.BaseURL
+	}
+
+	// 只有少数提供商需要特殊处理
+	switch apiConfig.Provider {
+	case "claude", "gemini":
+		apiConfig.Compatible = false
+	}
+
+	return apiConfig, nil
 }
 
 func (s *RelayService) GetModels() []model.LLModelInfo {
@@ -133,7 +189,6 @@ func (s *RelayService) GetModels() []model.LLModelInfo {
 	// SiliconFlow 模型
 	if config.HasProvider("siliconflow") {
 		modelList = append(modelList, []model.LLModelInfo{
-			{ID: "deepseek-chat", Object: "model", Provider: "siliconflow", Name: "DeepSeek Chat"},
 			{ID: "qwen/qwen2.5-72b-instruct", Object: "model", Provider: "siliconflow", Name: "Qwen2.5 72B"},
 			{ID: "meta-llama/llama-3.1-405b-instruct", Object: "model", Provider: "siliconflow", Name: "Llama 3.1 405B"},
 		}...)
@@ -158,7 +213,7 @@ func (s *RelayService) GetModels() []model.LLModelInfo {
 	return modelList
 }
 
-func (s *RelayService) getProvider(model string) string {
+func (s *RelayService) GetProvider(model string) string {
 	// OpenAI 模型
 	if strings.HasPrefix(model, "gpt-") {
 		return "openai"
@@ -215,37 +270,6 @@ func (s *RelayService) getProvider(model string) string {
 	}
 
 	return "unknown"
-}
-
-// getAPIConfig 根据提供商获取 API 配置
-func (s *RelayService) getAPIConfig(provider string) *APIConfig {
-	configProvider := config.GetProvider(provider)
-	if configProvider == nil {
-		fmt.Printf("[LLM] Provider %s not found in config\n", provider)
-		return nil
-	}
-
-	// 确定是否使用 OpenAI 兼容客户端
-	// 现在大多数提供商都支持 OpenAI 兼容的 API
-	compatible := true
-
-	// 只有少数提供商需要特殊处理
-	switch provider {
-	case "claude":
-		// Claude 有自己的 API 格式
-		compatible = false
-	case "gemini":
-		// Gemini 有自己的 API 格式
-		compatible = false
-	}
-
-	fmt.Printf("[LLM] Provider: %s, BaseURL: %s, Compatible: %t\n", provider, configProvider.BaseURL, compatible)
-
-	return &APIConfig{
-		BaseURL:    configProvider.BaseURL,
-		APIKey:     configProvider.APIKey,
-		Compatible: compatible,
-	}
 }
 
 // callWithClient 使用 OpenAI 客户端调用
@@ -362,36 +386,6 @@ func (s *RelayService) callWithHTTP(ctx context.Context, req *model.ChatRequest,
 	}
 
 	return &chatResp, nil
-}
-
-// ChatCompletionsStream 流式聊天完成
-func (s *RelayService) ChatCompletionsStream(ctx context.Context, req *model.ChatRequest) (<-chan *model.ChatStreamResponse, <-chan error) {
-	respChan := make(chan *model.ChatStreamResponse, 100)
-	errorChan := make(chan error, 1)
-
-	go func() {
-		defer close(respChan)
-		defer close(errorChan)
-
-		// 获取提供商
-		var apiConfig *APIConfig
-		if provider := s.getProvider(req.Model); provider == "unknown" {
-			errorChan <- fmt.Errorf("unsupported model: %s", req.Model)
-			return
-		} else if apiConfig = s.getAPIConfig(provider); apiConfig == nil {
-			errorChan <- fmt.Errorf("provider %s not configured", provider)
-			return
-		}
-
-		// 调用流式 API
-		if apiConfig.Compatible {
-			s.streamWithClient(ctx, req, apiConfig, respChan, errorChan)
-		} else {
-			s.streamWithHTTP(ctx, req, apiConfig, respChan, errorChan)
-		}
-	}()
-
-	return respChan, errorChan
 }
 
 // streamWithClient 使用 OpenAI 客户端进行流式调用
