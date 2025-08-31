@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"log"
 
 	"github.com/gin-contrib/cors"
@@ -12,6 +13,9 @@ import (
 	"llm-member/internal/handle"
 	"llm-member/internal/service"
 )
+
+//go:embed webroot
+var webroot embed.FS
 
 func main() {
 	if err := godotenv.Load(); err != nil {
@@ -44,7 +48,7 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	r.Use(handle.StaticRouteHandle(cfg))
+	r.Use(handle.StaticRouteHandle(cfg, webroot))
 	authService := service.NewAuthService()
 	v1 := r.Group("/v1")
 	{

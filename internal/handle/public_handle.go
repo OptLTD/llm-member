@@ -1,10 +1,12 @@
 package handle
 
 import (
+	"embed"
 	"html/template"
 	"llm-member/internal/config"
 	"llm-member/internal/service"
 	"net/http"
+	"os"
 	"path/filepath"
 
 	"github.com/gin-contrib/static"
@@ -30,29 +32,42 @@ func (h *PublicHandle) GetPricingPlans(c *gin.Context) {
 }
 
 // StaticRouteHandle 统一的路由和静态文件处理中间件
-func StaticRouteHandle(cfg *config.Config) gin.HandlerFunc {
+func StaticRouteHandle(cfg *config.Config, webroot embed.FS) gin.HandlerFunc {
 	var i18nService = service.NewI18nService()
-	var RenderPage = func(c *gin.Context, templateName string) {
+	var RenderPage = func(c *gin.Context, name string) {
+		tmplPath := filepath.Join("webroot", name+".html")
+		tmplData, err := webroot.ReadFile(tmplPath)
+		if err != nil {
+			c.String(404, "页面加载失败")
+			return
+		}
+		var curr = template.New(name)
+
+		// 解析主模板
+		if _, err := curr.Parse(string(tmplData)); err != nil {
+			c.String(500, "模板解析失败")
+			return
+		}
+
+		pageTmpl := filepath.Join("template", "page."+name+".html")
+		if pageData, err := os.ReadFile(pageTmpl); err == nil {
+			if _, err := curr.Parse(string(pageData)); err != nil {
+				c.String(500, pageTmpl+"模板解析失败: "+err.Error())
+				return
+			}
+		}
+
+		c.Status(200)
 		// 获取语言参数
 		language := c.DefaultQuery("lang", "zh")
 		translations := i18nService.GetTranslations(language)
 		templateData := gin.H{
-			"AppName": cfg.AppName, "AppDesc": cfg.AppDesc,
+			"AppName": cfg.AppName, "AppDesc": cfg.AppDesc, "Version": cfg.Version,
 			"Language": language, "T": translations,
 		}
-
-		var curr *template.Template
-		tmplPath := filepath.Join("./webroot", templateName+".html")
-		if tmpl, err := template.ParseFiles(tmplPath); err != nil {
-			c.String(404, "页面加载失败")
-		} else {
-			curr = tmpl
-		}
-
-		c.Status(200)
 		c.Header("Content-Type", "text/html; charset=utf-8")
 		if err := curr.Execute(c.Writer, templateData); err != nil {
-			c.String(500, "页面渲染失败")
+			c.String(500, "页面渲染失败："+err.Error())
 		}
 	}
 
@@ -81,7 +96,9 @@ func StaticRouteHandle(cfg *config.Config) gin.HandlerFunc {
 		case "/pricing", "/pricing.html":
 			RenderPage(c, "pricing")
 		default:
-			fs := static.LocalFile("./webroot", false)
+			fs, _ := static.EmbedFolder(
+				webroot, "webroot",
+			)
 			static.Serve("/", fs)(c)
 		}
 	}

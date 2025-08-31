@@ -14,6 +14,7 @@ type Config struct {
 	AppPort string
 	AppName string
 	AppDesc string
+	Version string
 	AppHost string
 	AppMode string
 	Storage string
@@ -40,6 +41,7 @@ func Load() *Config {
 		AppDesc: getEnv("APP_DESC", "Desc"),
 		AppHost: getEnv("APP_HOST", "localhost"),
 		Storage: getEnv("DATA_PATH", "./storage"),
+		Version: getEnv("APP_VERSION", "v1.0.0"),
 
 		// MySQL配置
 		MySQL: &MySQLConfig{

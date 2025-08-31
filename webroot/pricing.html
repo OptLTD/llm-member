@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,27 +11,41 @@
         .gradient-bg {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
+
         .pricing-card {
             transition: all 0.3s ease;
         }
+
         .pricing-card:hover {
             transform: scale(1.05);
         }
+
         .nav-link {
             transition: all 0.3s ease;
         }
+
         .nav-link:hover {
             color: #667eea;
         }
+
         .fade-in {
             animation: fadeIn 0.6s ease-in;
         }
+
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
     </style>
 </head>
+
 <body class="bg-gray-50">
     <!-- 导航栏 -->
     <nav class="bg-white shadow-lg fixed w-full top-0 z-50">
@@ -42,11 +57,13 @@
                         <span class="ml-2 text-xl font-bold text-gray-800">{{.AppName}}</span>
                     </a>
                     <div class="hidden md:ml-10 md:flex md:space-x-8">
-                        <a href="/" class="nav-link text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium">首页</a>
-                        <a href="/pricing" class="nav-link text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium">定价</a>
+                        <a href="/"
+                            class="nav-link text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium">首页</a>
+                        <a href="/pricing"
+                            class="nav-link text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium">定价</a>
                     </div>
                 </div>
-                
+
                 <div class="flex items-center space-x-4">
                     <button id="signInBtn" class="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium">
                         <i class="fas fa-sign-in-alt mr-1"></i>{{.T.SignInButton}}
@@ -58,7 +75,8 @@
                             <span id="userName"></span>
                             <i class="fas fa-chevron-down ml-1"></i>
                         </button>
-                        <div id="userDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                        <div id="userDropdown"
+                            class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
                             <a href="/profile" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                                 <i class="fas fa-user mr-2"></i>{{.T.Profile}}
                             </a>
@@ -69,7 +87,8 @@
                                 <i class="fas fa-key mr-2"></i>{{.T.APIKeys}}
                             </a>
                             <div class="border-t border-gray-100"></div>
-                            <button id="signOutBtn" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                            <button id="signOutBtn"
+                                class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                                 <i class="fas fa-sign-out-alt mr-2"></i>{{.T.SignOut}}
                             </button>
                         </div>
@@ -104,8 +123,22 @@
             </div>
         </section>
     </main>
+    <!-- 页脚 -->
+    <footer class="py-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center">
+                <p class="text-gray-400 text-sm">
+                    {{.AppName}} 由 <a href="https://github.com/OptLTD/llm-member" target="_blank">
+                        OptLTD/LLM-MEMBER
+                    </a>
+                    构建, 版本号：{{.Version}}
+                </p>
+            </div>
+        </div>
+    </footer>
 
     <script src="utils.js"></script>
     <script src="pricing.js"></script>
 </body>
+
 </html>
