@@ -20,6 +20,10 @@ func NewPayment(method model.PaymentMethod) (IPayment, error) {
 		return NewAlipayPayment()
 	case "wechat":
 		return NewWechatPayment()
+	case "creem":
+		return NewCreemPayment()
+	case "stripe":
+		return NewStripePayment()
 	case "mock":
 		return &MockPayment{}, nil
 	default:

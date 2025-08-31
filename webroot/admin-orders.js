@@ -187,7 +187,9 @@ class OrdersManager {
     const badges = {
       'alipay': '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">支付宝</span>',
       'wechat': '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">微信支付</span>',
-      'paypal': '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">PayPal</span>'
+      'paypal': '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">PayPal</span>',
+      'stripe': '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-800">Stripe</span>',
+      'creem': '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">Creem</span>'
     };
     return badges[method] || `<span class="text-gray-500">${this.app.escapeHtml(method || '')}</span>`;
   }

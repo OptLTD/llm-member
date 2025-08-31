@@ -63,7 +63,14 @@ func (h *OrderHandler) GetPaymentMethods(c *gin.Context) {
 	if config.HasPaymentProvider("stripe") {
 		methods = append(methods, gin.H{
 			"method": "stripe", "name": "Stripe",
-			"icon": "stripe", "color": "#008000",
+			"icon": "fab fa-stripe", "color": "#635BFF",
+		})
+	}
+
+	if config.HasPaymentProvider("creem") {
+		methods = append(methods, gin.H{
+			"method": "creem", "name": "Creem",
+			"icon": "fas fa-credit-card", "color": "#6366F1",
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{

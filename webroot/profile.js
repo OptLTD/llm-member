@@ -236,6 +236,13 @@ const DataManager = {
         totalLimit = limit.monthlyProjects || 0;
         break
       }
+      default: {
+        dailyUsed = usage.todayTokens || 0;
+        totalUsed = usage.totalTokens || 0;
+        dailyLimit = limit.dailyTokens || 0;
+        totalLimit = limit.monthlyTokens || 0;
+        break
+      }
     }
 
     document.getElementById("dailyUsage").textContent = `${dailyUsed} / ${Utils.formatNumber(dailyLimit)}`;

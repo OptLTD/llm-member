@@ -17,12 +17,12 @@ import (
 // WechatPayment 微信支付实现
 type WechatPayment struct {
 	client *wechat.ClientV3
-	config *config.PaymentProvider
+	config *config.WechatProvider
 }
 
 // NewWechatPayment 创建微信支付实例
 func NewWechatPayment() (*WechatPayment, error) {
-	provider := config.GetPaymentProvider("wechat")
+	provider := config.GetWechatProvider()
 	if provider == nil {
 		return nil, fmt.Errorf("wechat payment provider not configured")
 	}
