@@ -274,7 +274,9 @@ class PaymentManager {
 
   updatePayButton() {
     const payBtn = document.getElementById("payBtn");
-    const hasNum = (this.selectedPlan.plan !== this.keyOfUsage || this.customAmount > 0)
+    if (!payBtn) return;
+    
+    const hasNum = (!this.selectedPlan || this.selectedPlan.plan !== this.keyOfUsage || this.customAmount > 0)
     const canPay = this.selectedPlan && this.selectedPaymentMethod && hasNum;
 
     payBtn.disabled = !canPay;
@@ -348,10 +350,17 @@ class PaymentManager {
       });
 
       if (data && data.orderId) {
-        var qrcode = await this.loadImage(data.qrcode);
-        this.currentOrderId = data.orderId;
-        this.showPaymentQR(qrcode);
-        this.startPaymentCheck(data);
+        if (!data.qrcode && data.payUrl) {
+          window.open(data.payUrl, '_blank');
+          this.currentOrderId = data.orderId;
+          this.showPaymentRedirect();
+          this.startPaymentCheck(data);
+        } else {
+          var qrcode = await this.loadImage(data.qrcode);
+          this.currentOrderId = data.orderId;
+          this.showPaymentQR(qrcode);
+          this.startPaymentCheck(data);
+        }
       } else if (data.error && data.plan) {
         this.showHasActivePlan(data.plan, data.expireAt);
       } else {
@@ -405,6 +414,49 @@ class PaymentManager {
     document.getElementById("qrCodeImage").src = qrcode;
     document.getElementById("paymentMethodName").textContent =
       this.selectedPaymentMethod.name;
+  }
+
+  showPaymentRedirect() {
+    document.getElementById("paymentLoading").classList.add("hidden");
+    document.getElementById("paymentQR").classList.add("hidden");
+    document.getElementById("paymentSuccess").classList.add("hidden");
+    document.getElementById("paymentError").classList.add("hidden");
+    document.getElementById("hasActivePlan").classList.add("hidden");
+    
+    // 移除已存在的跳转提示
+    const existingRedirect = document.getElementById("paymentRedirect");
+    if (existingRedirect) {
+      existingRedirect.remove();
+    }
+    
+    // 显示跳转支付提示信息
+    const paymentContainer = document.querySelector("#paymentModal .text-center");
+    if (paymentContainer) {
+      const redirectInfo = document.createElement("div");
+      redirectInfo.id = "paymentRedirect";
+      redirectInfo.innerHTML = `
+        <div class="mb-4">
+          <i class="fas fa-external-link-alt text-blue-500 text-4xl mb-2"></i>
+        </div>
+        <h3 class="text-lg font-semibold mb-2">已跳转到支付页面</h3>
+        <p class="text-gray-600 mb-4">请在新打开的页面中完成支付</p>
+        <p class="text-sm text-gray-500 mb-4">支付完成后，此页面将自动更新</p>
+        <button id="cancelPaymentBtn2" class="w-full bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600">
+          取消支付
+        </button>
+      `;
+      
+      paymentContainer.appendChild(redirectInfo);
+      redirectInfo.classList.remove("hidden");
+      
+      // 绑定取消按钮事件
+      const cancelBtn = document.getElementById("cancelPaymentBtn2");
+      if (cancelBtn) {
+        cancelBtn.addEventListener("click", () => {
+          this.cancelPayment();
+        });
+      }
+    }
   }
 
   showPaymentSuccess() {

@@ -5,7 +5,8 @@ type PaymentProvider struct {
 	Name  string // 支付提供商名称
 	AppID string // 应用ID
 	Token string // 密钥/Token
-	// Enabled bool   // 是否启用
+
+	WHSEC string // Webhook签名密钥
 }
 
 type WechatProvider struct {
@@ -78,6 +79,7 @@ func GetPaymentProviders() []PaymentProvider {
 		providers = append(providers, PaymentProvider{
 			Name: "creem", AppID: appID,
 			Token: getEnv("CREEM_TOKEN", ""),
+			WHSEC: getEnv("CREEM_WHSEC", ""),
 		})
 	}
 

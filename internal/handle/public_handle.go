@@ -15,11 +15,13 @@ import (
 
 type PublicHandle struct {
 	setupService *service.SetupService
+	orderService *service.OrderService
 }
 
 func NewPublicHandler() *PublicHandle {
 	return &PublicHandle{
 		setupService: service.NewSetupService(),
+		orderService: service.NewOrderService(),
 	}
 }
 
@@ -29,6 +31,30 @@ func (h *PublicHandle) GetPricingPlans(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"plans": plans,
 	})
+}
+
+// DoPaymentCallback 处理支付回调
+func (h *PublicHandle) DoPaymentCallback(c *gin.Context) {
+	if name := c.Param("name"); name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "支付方式"})
+		return
+	}
+
+	// 验证支付回调签名
+	order, err := h.orderService.VerifyCallback(c.Param("name"), c.Request)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "回调验证失败: " + err.Error()})
+		return
+	}
+
+	// 标记为支付成功
+	limit, _ := h.setupService.GetPlanLimit(order.PayPlan)
+	err = h.orderService.PaySuccess(order.OrderID, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "支付成功"})
 }
 
 // StaticRouteHandle 统一的路由和静态文件处理中间件

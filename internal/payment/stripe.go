@@ -3,6 +3,7 @@ package payment
 import (
 	"fmt"
 	"log"
+	"net/http"
 
 	"llm-member/internal/config"
 	"llm-member/internal/model"
@@ -78,4 +79,11 @@ func (s *StripePayment) Refund(order *model.OrderModel) error {
 	// 简化实现：记录退款操作
 	log.Printf("[stripe][%s] refund requested", order.OrderID)
 	return nil
+}
+
+// Webhook Stripe支付回调验证
+func (s *StripePayment) Webhook(req *http.Request) (*Event, error) {
+	// TODO: 实现Stripe webhook验证逻辑
+	log.Printf("[stripe] webhook verification not implemented")
+	return nil, fmt.Errorf("stripe webhook verification not implemented")
 }

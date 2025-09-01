@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"time"
 
 	"llm-member/internal/config"
@@ -219,4 +220,11 @@ func (w *WechatPayment) Refund(order *model.OrderModel) error {
 	log.Printf("[wechat][%s] refund processed successfully, refund_id: %s", order.OrderID, wxRsp.Response.RefundId)
 	order.Status = "refunded"
 	return nil
+}
+
+// Webhook 微信支付回调验证
+func (w *WechatPayment) Webhook(req *http.Request) (*Event, error) {
+	// TODO: 实现微信支付webhook验证逻辑
+	log.Printf("[wechat] webhook verification not implemented")
+	return nil, fmt.Errorf("wechat webhook verification not implemented")
 }

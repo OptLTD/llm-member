@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
-	"time"
 
 	"llm-member/internal/config"
 	"llm-member/internal/model"
@@ -85,7 +84,7 @@ func (h *OrderHandler) ShowPaymentQrcode(c *gin.Context) {
 		return
 	}
 
-	order, err := h.orderService.QueryOrder(c.Param("id"))
+	order, err := h.orderService.FindOrder(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "订单不存在"})
 		return
@@ -155,12 +154,12 @@ func (h *OrderHandler) CreatePaymentOrder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户信息失败"})
 		return
 	}
-	if user.ExpireAt != nil && user.ExpireAt.After(time.Now()) {
-		c.JSON(http.StatusOK, gin.H{"error": "您已订阅套餐，不能重复订阅",
-			"plan": user.UserPlan, "expireAt": user.ExpireAt,
-		})
-		return
-	}
+	// if user.ExpireAt != nil && user.ExpireAt.After(time.Now()) {
+	// 	c.JSON(http.StatusOK, gin.H{"error": "您已订阅套餐，不能重复订阅",
+	// 		"plan": user.UserPlan, "expireAt": user.ExpireAt,
+	// 	})
+	// 	return
+	// }
 
 	plan := model.PlanInfo{Plan: string(req.PayPlan)}
 	if err = h.setupService.GetAsTarget("plan."+plan.Plan, &plan); err != nil {
@@ -174,6 +173,14 @@ func (h *OrderHandler) CreatePaymentOrder(c *gin.Context) {
 
 	// 创建支付订单（这里模拟支付接口）
 	order, err := h.orderService.CreateOrder(&req, &plan)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建订单失败: " + err.Error()})
+		return
+	}
+	if order == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建订单失败: 订单为空"})
+		return
+	}
 	response := model.OrderResponse{
 		Amount: order.Amount, QRCode: order.QRCode,
 		OrderID: order.OrderID, PayURL: order.PayURL,
@@ -189,7 +196,7 @@ func (h *OrderHandler) QueryPaymentOrder(c *gin.Context) {
 		return
 	}
 
-	order, err := h.orderService.QueryOrder(c.Param("id"))
+	order, err := h.orderService.FindOrder(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "订单不存在"})
 		return
@@ -202,39 +209,15 @@ func (h *OrderHandler) QueryPaymentOrder(c *gin.Context) {
 		return
 	}
 
-	currStatus := order.Status
-	err = h.orderService.QueryPayment(order)
-	if err == nil && currStatus != order.Status {
-		limit, _ := h.setupService.GetPlanLimit(order.PayPlan)
-		err := h.orderService.PaySuccess(c.Param("id"), limit)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-	}
+	// currStatus := order.Status
+	// err = h.orderService.QueryPayment(order)
+	// if err == nil && currStatus != order.Status {
+	// 	limit, _ := h.setupService.GetPlanLimit(order.PayPlan)
+	// 	err := h.orderService.PaySuccess(c.Param("id"), limit)
+	// 	if err != nil {
+	// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	// 		return
+	// 	}
+	// }
 	c.JSON(http.StatusOK, order)
-}
-
-// DoPaymentCallback 支付回调处理
-func (h *OrderHandler) DoPaymentCallback(c *gin.Context) {
-	if orderId := c.Param("id"); orderId == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "订单ID不能为空"})
-		return
-	}
-
-	order, err := h.orderService.QueryOrder(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "订单不存在"})
-		return
-	}
-
-	// 这里应该验证支付平台的回调签名
-	// 为了演示，我们直接标记为支付成功
-	limit, _ := h.setupService.GetPlanLimit(order.PayPlan)
-	err = h.orderService.PaySuccess(order.OrderID, limit)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"message": "支付成功"})
 }

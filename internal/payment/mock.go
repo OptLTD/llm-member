@@ -2,6 +2,7 @@ package payment
 
 import (
 	"log"
+	"net/http"
 	"time"
 
 	"llm-member/internal/model"
@@ -44,7 +45,26 @@ func (m *MockPayment) Close(order *model.OrderModel) error {
 // Refund 模拟退款，直接标记为成功
 func (m *MockPayment) Refund(order *model.OrderModel) error {
 	// 模拟退款成功
-	log.Printf("[mock][%s] refund processed successfully", order.OrderID)
+	log.Printf("[mock][%s] refund successful", order.OrderID)
 	order.Status = model.PaymentRefunded
 	return nil
+}
+
+// Webhook 模拟支付回调验证
+func (m *MockPayment) Webhook(req *http.Request) (*Event, error) {
+	// 模拟验证成功
+	log.Printf("[mock] webhook verification successful")
+
+	// 返回模拟的webhook事件
+	event := &Event{
+		Type:    "payment.success",
+		OrderID: "mock_order_id",
+		Status:  "success",
+		Amount:  99.99,
+
+		Data: make(object),
+		Time: time.Now().Unix(),
+	}
+
+	return event, nil
 }

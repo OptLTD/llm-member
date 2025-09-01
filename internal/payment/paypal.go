@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"time"
 
 	"llm-member/internal/config"
@@ -126,4 +127,11 @@ func (p *PaypalPayment) Refund(order *model.OrderModel) error {
 
 	order.Status = "refunded"
 	return nil
+}
+
+// Webhook PayPal支付回调验证
+func (p *PaypalPayment) Webhook(req *http.Request) (*Event, error) {
+	// TODO: 实现PayPal webhook验证逻辑
+	log.Printf("[paypal] webhook verification not implemented")
+	return nil, fmt.Errorf("paypal webhook verification not implemented")
 }

@@ -81,6 +81,8 @@ func main() {
 
 			s := handle.NewPublicHandler()
 			rootApi.POST("/pricing-plans", s.GetPricingPlans)
+			// order callback should public
+			rootApi.POST("/callback/:name", s.DoPaymentCallback)
 		}
 
 		basicApi := api.Group("/", auth.AuthMiddleware(authService))
@@ -99,7 +101,6 @@ func main() {
 			o := handle.NewOrderHandler()
 			orderApi.POST("/create", o.CreatePaymentOrder)
 			orderApi.POST("/methods", o.GetPaymentMethods)
-			orderApi.POST("/callback", o.DoPaymentCallback)
 			orderApi.POST("/query/:id", o.QueryPaymentOrder)
 			orderApi.POST("/qrcode/:id", o.ShowPaymentQrcode)
 		}

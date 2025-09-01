@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -143,4 +144,11 @@ func (p *AlipayPayment) Refund(order *model.OrderModel) error {
 	log.Printf("[alipay][%s] refund processed successfully", order.OrderID)
 	order.Status = model.PaymentRefunded
 	return nil
+}
+
+// Webhook 支付宝支付回调验证
+func (p *AlipayPayment) Webhook(req *http.Request) (*Event, error) {
+	// TODO: 实现支付宝webhook验证逻辑
+	log.Printf("[alipay] webhook verification not implemented")
+	return nil, fmt.Errorf("alipay webhook verification not implemented")
 }

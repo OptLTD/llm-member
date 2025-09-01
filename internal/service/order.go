@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
+	"net/http"
 	"time"
 
 	"llm-member/internal/config"
@@ -61,8 +63,8 @@ func (s *OrderService) CreateOrder(req *model.OrderRequest, plan *model.PlanInfo
 	return order, nil
 }
 
-// QueryOrder 获取支付订单
-func (s *OrderService) QueryOrder(orderID string) (*model.OrderModel, error) {
+// FindOrder 获取支付订单
+func (s *OrderService) FindOrder(orderID string) (*model.OrderModel, error) {
 	var order model.OrderModel
 	if err := s.db.Where("order_id = ?", orderID).First(&order).Error; err != nil {
 		return nil, err
@@ -70,18 +72,51 @@ func (s *OrderService) QueryOrder(orderID string) (*model.OrderModel, error) {
 	return &order, nil
 }
 
-func (s *OrderService) QueryPayment(order *model.OrderModel) error {
-	if order.Status != model.PaymentPending {
-		return nil
-	}
-	provider, err := payment.NewPayment(order.Method)
+// VerifyCallback 验证支付回调
+func (s *OrderService) VerifyCallback(name string, req *http.Request) (*model.OrderModel, error) {
+	method := model.PaymentMethod(name)
+	provider, err := payment.NewPayment(method)
 	if err != nil {
-		return fmt.Errorf("创建支付实例失败: %v", err)
+		return nil, fmt.Errorf("创建支付实例失败: %v", err)
 	}
-	if err = provider.Query(order); err != nil {
-		return fmt.Errorf("查询订单状态失败: %v", err)
+
+	// 使用支付提供商的Webhook方法验证回调
+	event, err := provider.Webhook(req)
+	if err != nil {
+		return nil, fmt.Errorf("支付回调验证失败: %v", err)
 	}
-	return nil
+	// 记录webhook事件信息
+	if event != nil {
+		log.Printf("[webhook] 收到支付事件: Type=%s, OrderID=%s, Status=%s, Amount=%.2f",
+			event.Type, event.OrderID, event.Status, event.Amount)
+	}
+
+	// 根据事件中的OrderID查找订单
+	if event == nil || event.OrderID == "" {
+		return nil, fmt.Errorf("webhook事件中缺少订单ID")
+	}
+
+	// 查找订单
+	order, err := s.FindOrder(event.OrderID)
+	if err != nil {
+		return nil, fmt.Errorf("查找订单失败: %v", err)
+	}
+
+	return order, nil
+}
+
+func (s *OrderService) QueryPayment(name string, data map[string]any) (*model.OrderModel, error) {
+	// method := model.PaymentMethod(name)
+	// provider, err := payment.NewPayment(method)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("创建支付实例失败: %v", err)
+	// }
+
+	var order *model.OrderModel
+	// if order.Status != model.PaymentPending {
+	// 	return nil
+	// }
+	return order, nil
 }
 
 // UpdatePaymentStatus 更新支付状态
@@ -102,7 +137,7 @@ func (s *OrderService) UpdateStatus(orderID string, status string) error {
 
 // ProcessPaymentSuccess 处理支付成功
 func (s *OrderService) PaySuccess(orderId string, limit *model.ApiLimit) error {
-	order, err := s.QueryOrder(orderId)
+	order, err := s.FindOrder(orderId)
 	if err != nil {
 		return fmt.Errorf("查询订单失败: %v", err)
 	}

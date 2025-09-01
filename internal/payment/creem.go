@@ -10,8 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strconv"
-	"strings"
+	"os"
 	"time"
 
 	"llm-member/internal/config"
@@ -24,12 +23,27 @@ type object = map[string]any
 type CreemPayment struct {
 	config *config.PaymentProvider
 	client *http.Client
+
+	baseURL string // Creem API基础URL
 }
 
 // CreemCustomer 客户信息结构
 type CreemCustomer struct {
 	ID    string `json:"id,omitempty"`
 	Email string `json:"email,omitempty"`
+}
+
+// CreemCreateCustomerRequest 创建客户请求结构
+type CreemCreateCustomerRequest struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
+}
+
+// CreemCreateCustomerResponse 创建客户响应结构
+type CreemCreateCustomerResponse struct {
+	ID     string `json:"id"`
+	Email  string `json:"email"`
+	Object string `json:"object"`
 }
 
 // CreemCheckoutRequest Creem创建支付请求结构
@@ -101,45 +115,39 @@ func NewCreemPayment() (IPayment, error) {
 		return nil, fmt.Errorf("creem payment provider not configured")
 	}
 
+	// 根据环境设置baseURL
+	baseURL := "https://api.creem.io/v1" // 默认生产环境
+	if os.Getenv("APP_MODE") != "release" {
+		baseURL = "https://test-api.creem.io/v1" // 非生产环境使用测试URL
+	}
+
 	return &CreemPayment{
 		config: provider,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		baseURL: baseURL,
 	}, nil
 }
 
 // Create 创建Creem支付订单
 func (c *CreemPayment) Create(order *model.OrderModel) error {
-	// 根据套餐类型设置产品ID（需要在Creem后台预先创建产品）
-	var productID string
-	switch order.PayPlan {
-	case model.PlanBasic:
-		productID = "prod_basic_plan" // 需要在Creem后台创建对应产品，格式为prod_xxx
-	case model.PlanExtra:
-		productID = "prod_extra_plan"
-	case model.PlanUltra:
-		productID = "prod_ultra_plan"
-	case model.PlanSuper:
-		productID = "prod_super_plan"
-	default:
-		productID = "prod_basic_plan"
-	}
-
-	// 创建支付请求
 	request := CreemCheckoutRequest{
-		RequestID: order.OrderID, // 使用订单ID作为request_id来跟踪支付
-		ProductID: productID,
+		RequestID: order.OrderID,
+		ProductID: c.config.AppID,
 		Customer: &CreemCustomer{
-			ID: strconv.FormatUint(order.UserID, 10),
+			Email: order.User.Email,
 		},
-		SuccessURL: fmt.Sprintf("https://your-domain.com/payment/success?order_id=%s", order.OrderID),
 		Metadata: object{
 			"order_id": order.OrderID,
-			"plan":     string(order.PayPlan),
 			"user_id":  order.UserID,
+			"pay_plan": string(order.PayPlan),
 		},
 		Units: 1, // 默认购买1个单位
+		// SuccessURL: fmt.Sprintf(
+		// 	"http://%s/success?order_id=%s",
+		// 	"localhost", order.OrderID,
+		// ),
 	}
 
 	// 发送HTTP请求到Creem API
@@ -157,11 +165,112 @@ func (c *CreemPayment) Create(order *model.OrderModel) error {
 
 	// 更新订单信息
 	order.PayURL = checkoutResp.CheckoutURL
-	order.QRCode = checkoutResp.CheckoutURL // Creem使用URL进行支付
 	order.Status = model.PaymentPending
-
-	log.Printf("[creem][%s] payment created successfully, checkout URL: %s", order.OrderID, checkoutResp.CheckoutURL)
+	log.Printf(
+		"[creem][%s] payment created successfully, checkout URL: %s",
+		order.OrderID, checkoutResp.CheckoutURL,
+	)
 	return nil
+}
+
+// Webhook Creem支付回调验证
+func (c *CreemPayment) Webhook(req *http.Request) (*Event, error) {
+	if c.config.WHSEC == "" {
+		return nil, fmt.Errorf("creem webhook verification failed: webhook secret not configured")
+	}
+	event, err := c.HandleWebhook(req, c.config.WHSEC)
+	if err != nil {
+		log.Printf("[creem] webhook verification failed: %v", err)
+		return nil, fmt.Errorf("creem webhook verification failed: %v", err)
+	}
+
+	log.Printf("[creem] received webhook event type: %s, id: %s", event.EventType, event.ID)
+
+	// 从webhook数据中提取订单信息
+	orderID := ""
+	amount := 0
+	status := "unknown"
+
+	// 根据事件类型处理不同的数据结构
+	switch event.EventType {
+	case "checkout.completed", "payment.succeeded", "order.completed":
+		status = "success"
+		// 从事件数据中提取订单ID和金额
+		if data, ok := event.Object["order"].(map[string]interface{}); ok {
+			if id, exists := data["id"].(string); exists {
+				orderID = id
+			}
+			if amt, exists := data["amount"].(float64); exists {
+				amount = int(amt)
+			}
+		}
+		// 尝试从metadata中获取订单ID
+		if orderID == "" {
+			if metadata, ok := event.Object["metadata"].(map[string]interface{}); ok {
+				if oid, exists := metadata["order_id"].(string); exists {
+					orderID = oid
+				}
+			}
+		}
+		// 如果还是没有订单ID，尝试使用request_id
+		if orderID == "" {
+			if reqID, ok := event.Object["request_id"].(string); ok {
+				orderID = reqID
+			}
+		}
+
+	case "checkout.failed", "payment.failed", "order.failed":
+		status = "failed"
+		// 同样提取订单信息
+		if metadata, ok := event.Object["metadata"].(map[string]interface{}); ok {
+			if oid, exists := metadata["order_id"].(string); exists {
+				orderID = oid
+			}
+		}
+		if orderID == "" {
+			if reqID, ok := event.Object["request_id"].(string); ok {
+				orderID = reqID
+			}
+		}
+
+	case "checkout.cancelled", "payment.cancelled", "order.cancelled":
+		status = "cancelled"
+		if metadata, ok := event.Object["metadata"].(map[string]interface{}); ok {
+			if oid, exists := metadata["order_id"].(string); exists {
+				orderID = oid
+			}
+		}
+		if orderID == "" {
+			if reqID, ok := event.Object["request_id"].(string); ok {
+				orderID = reqID
+			}
+		}
+
+	default:
+		log.Printf("[creem] unknown webhook event type: %s", event.EventType)
+		status = "unknown"
+		// 尝试提取订单ID
+		if metadata, ok := event.Object["metadata"].(map[string]interface{}); ok {
+			if oid, exists := metadata["order_id"].(string); exists {
+				orderID = oid
+			}
+		}
+	}
+
+	if orderID == "" {
+		log.Printf("[creem] warning: could not extract order_id from webhook event %s", event.ID)
+		// 使用事件ID作为fallback
+		orderID = event.ID
+	}
+
+	log.Printf("[creem] processed webhook: order_id=%s, status=%s, amount=%d", orderID, status, amount)
+
+	return &Event{
+		Type: event.EventType, Data: event.Object,
+		OrderID: orderID, Status: status,
+		Amount: float64(amount),
+		Time:   event.CreatedAt / 1000,
+	}, nil
 }
 
 // Query 查询Creem支付状态
@@ -278,8 +387,7 @@ func (c *CreemPayment) Refund(order *model.OrderModel) error {
 
 // makeAPIRequest 发送API请求到Creem
 func (c *CreemPayment) makeAPIRequest(method, endpoint string, data any) ([]byte, error) {
-	baseURL := "https://api.creem.io/v1" // Creem API基础URL
-	url := baseURL + endpoint
+	url := c.baseURL + endpoint
 
 	var reqBody io.Reader
 	if data != nil {
@@ -327,13 +435,21 @@ func (c *CreemPayment) makeAPIRequest(method, endpoint string, data any) ([]byte
 }
 
 // CreemWebhookEvent Creem webhook事件结构
+// 根据Creem官方文档定义的webhook事件格式
+// 常见的事件类型包括：
+// - checkout.completed: 支付完成
+// - checkout.failed: 支付失败
+// - checkout.cancelled: 支付取消
+// - payment.succeeded: 支付成功
+// - payment.failed: 支付失败
+// - order.completed: 订单完成
+// - order.failed: 订单失败
 type CreemWebhookEvent struct {
-	ID     string `json:"id"`
-	Object string `json:"object"`
-	Type   string `json:"type"`
-	Data   object `json:"data"`
+	ID        string `json:"id"`        // 事件唯一标识符
+	EventType string `json:"eventType"` // 事件类型（Creem使用eventType而不是type）
+	Object    object `json:"object"`    // 事件数据，包含订单、支付等信息
 
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt int64 `json:"created_at"` // 事件创建时间（Unix时间戳毫秒）
 }
 
 // HandleWebhook 处理Creem webhook事件
@@ -344,6 +460,21 @@ func (c *CreemPayment) HandleWebhook(req *http.Request, webhookSecret string) (*
 		return nil, fmt.Errorf("failed to read webhook body: %v", err)
 	}
 
+	// 记录原始webhook数据用于调试
+	log.Printf("[creem] webhook received: method=%s, content-length=%d, user-agent=%s",
+		req.Method, len(body), req.Header.Get("User-Agent"))
+
+	// 验证HTTP方法
+	if req.Method != "POST" {
+		return nil, fmt.Errorf("invalid HTTP method: %s, expected POST", req.Method)
+	}
+
+	// 验证Content-Type
+	contentType := req.Header.Get("Content-Type")
+	if contentType != "application/json" && contentType != "application/json; charset=utf-8" {
+		log.Printf("[creem] warning: unexpected content-type: %s", contentType)
+	}
+
 	// 验证webhook签名
 	if err := c.verifyWebhookSignature(req, body, webhookSecret); err != nil {
 		return nil, fmt.Errorf("webhook signature verification failed: %v", err)
@@ -352,49 +483,74 @@ func (c *CreemPayment) HandleWebhook(req *http.Request, webhookSecret string) (*
 	// 解析webhook事件
 	var event CreemWebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
+		log.Printf("[creem] failed to parse webhook JSON: %s", string(body))
 		return nil, fmt.Errorf("failed to parse webhook event: %v", err)
 	}
 
-	log.Printf("[creem] received webhook event: %s, type: %s", event.ID, event.Type)
-	return &event, nil
-}
-
-// verifyWebhookSignature 验证Creem webhook签名
-func (c *CreemPayment) verifyWebhookSignature(req *http.Request, body []byte, webhookSecret string) error {
-	// 获取签名头
-	signatureHeader := req.Header.Get("X-Creem-Signature")
-	if signatureHeader == "" {
-		return fmt.Errorf("missing webhook signature")
+	// 验证事件基本字段
+	if event.ID == "" {
+		return nil, fmt.Errorf("webhook event missing required field: id")
+	}
+	if event.EventType == "" {
+		return nil, fmt.Errorf("webhook event missing required field: eventType")
 	}
 
-	// 解析签名
-	// Creem签名格式通常是: t=timestamp,v1=signature
-	parts := strings.Split(signatureHeader, ",")
-	var timestamp, signature string
-	for _, part := range parts {
-		if strings.HasPrefix(part, "t=") {
-			timestamp = strings.TrimPrefix(part, "t=")
-		} else if strings.HasPrefix(part, "v1=") {
-			signature = strings.TrimPrefix(part, "v1=")
+	// 检查事件时间戳，防止重放攻击（允许5分钟的时间差）
+	if event.CreatedAt > 0 {
+		eventTime := time.Unix(event.CreatedAt/1000, 0)
+		timeDiff := time.Since(eventTime)
+		if timeDiff > 5*time.Minute {
+			log.Printf("[creem] warning: webhook event is too old: %v", timeDiff)
+			// 注意：这里只是警告，不阻止处理，因为时钟可能不同步
+		}
+		if timeDiff < -1*time.Minute {
+			log.Printf("[creem] warning: webhook event is from future: %v", timeDiff)
 		}
 	}
 
-	if timestamp == "" || signature == "" {
-		return fmt.Errorf("invalid signature format")
+	log.Printf("[creem] successfully parsed webhook event: id=%s, type=%s, created_at=%d",
+		event.ID, event.EventType, event.CreatedAt)
+	return &event, nil
+}
+
+// verifyWebhookSignature 验证webhook签名
+// 根据Creem官方文档，webhook签名验证流程：
+// 1. 从请求头"creem-signature"获取签名
+// 2. 使用HMAC-SHA256算法，以webhook密钥为key，请求体为消息计算签名
+// 3. 将计算出的签名与接收到的签名进行比较
+// 注意：签名比较使用hmac.Equal防止时序攻击
+func (c *CreemPayment) verifyWebhookSignature(req *http.Request, body []byte, webhookSecret string) error {
+	// 获取签名头 - Creem使用'creem-signature'头
+	signatureHeader := req.Header.Get("creem-signature")
+	if signatureHeader == "" {
+		// 尝试其他可能的头名称
+		signatureHeader = req.Header.Get("Creem-Signature")
+		if signatureHeader == "" {
+			return fmt.Errorf("missing webhook signature header 'creem-signature'")
+		}
 	}
 
-	// 构建签名字符串
-	signedPayload := timestamp + "." + string(body)
+	// 验证webhook密钥是否配置
+	if webhookSecret == "" {
+		return fmt.Errorf("webhook secret not configured")
+	}
 
-	// 计算HMAC-SHA256签名
+	// 计算期望的签名
+	// 使用HMAC-SHA256算法，密钥为webhookSecret，消息为请求体
 	h := hmac.New(sha256.New, []byte(webhookSecret))
-	h.Write([]byte(signedPayload))
+	h.Write(body)
 	expectedSignature := hex.EncodeToString(h.Sum(nil))
 
-	// 比较签名
-	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
-		return fmt.Errorf("signature mismatch")
+	// 记录签名验证信息（调试用）
+	log.Printf("[creem] signature verification: received=%s, expected=%s",
+		signatureHeader, expectedSignature)
+
+	// 安全比较签名（使用hmac.Equal防止时序攻击）
+	if !hmac.Equal([]byte(signatureHeader), []byte(expectedSignature)) {
+		return fmt.Errorf("signature mismatch: received=%s, expected=%s",
+			signatureHeader, expectedSignature)
 	}
 
+	log.Printf("[creem] webhook signature verification successful")
 	return nil
 }
