@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"llm-member/internal/config"
+	"llm-member/internal/consts"
 	"llm-member/internal/model"
 
 	"github.com/go-pay/gopay"
@@ -24,13 +25,13 @@ type PaypalPayment struct {
 func NewPaypalPayment() (*PaypalPayment, error) {
 	provider := config.GetPaymentProvider("paypal")
 	if provider == nil {
-		return nil, fmt.Errorf("paypal payment provider not configured")
+		return nil, consts.ErrPaymentProviderNotConfigured
 	}
 
 	// 创建PayPal客户端
 	client, err := paypal.NewClient(provider.AppID, provider.Token, false) // false表示沙箱环境
 	if err != nil {
-		return nil, fmt.Errorf("failed to create paypal client: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrPaymentClientCreationFailed, err)
 	}
 
 	return &PaypalPayment{
@@ -78,7 +79,7 @@ func (p *PaypalPayment) Create(order *model.OrderModel) error {
 	result, err := p.client.CreateOrder(context.Background(), bodyMap)
 	if err != nil {
 		log.Printf("[paypal][%s] failed to create order: %v", order.OrderID, err)
-		return fmt.Errorf("failed to create payment: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrPaymentCreationFailed, err)
 	}
 
 	// 获取支付链接
@@ -133,5 +134,5 @@ func (p *PaypalPayment) Refund(order *model.OrderModel) error {
 func (p *PaypalPayment) Webhook(req *http.Request) (*Event, error) {
 	// TODO: 实现PayPal webhook验证逻辑
 	log.Printf("[paypal] webhook verification not implemented")
-	return nil, fmt.Errorf("paypal webhook verification not implemented")
+	return nil, consts.ErrPaymentWebhookNotImplemented
 }

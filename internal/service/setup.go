@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"llm-member/internal/config"
+	"llm-member/internal/consts"
 	"llm-member/internal/model"
 	"llm-member/internal/support"
 
@@ -33,15 +34,15 @@ func HandleInit() error {
 		cfg: config.Load(),
 	}
 	if err := s.autoMigration(); err != nil {
-		return err
+		return fmt.Errorf("%w: %v", consts.ErrDatabaseMigrationFailed, err)
 	}
 
 	if err := s.initDefaultConfigs(); err != nil {
-		return err
+		return fmt.Errorf("%w: %v", consts.ErrInitDefaultConfigsFailed, err)
 	}
 
 	if err := s.createDefaultAdmin(); err != nil {
-		return err
+		return fmt.Errorf("%w: %v", consts.ErrCreateDefaultAdminFailed, err)
 	}
 	return nil
 }
@@ -141,10 +142,10 @@ func (s *SetupService) ParsePlanLimit(plan *model.PlanInfo) (*model.ApiLimit, er
 	periodPattern := `^\d+[dmy]$`
 	matched, err := regexp.MatchString(periodPattern, plan.Period)
 	if err != nil {
-		return nil, fmt.Errorf("period regex error: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrPeriodRegexError, err)
 	}
 	if !matched {
-		return nil, fmt.Errorf("plan period format error: %s", plan.Period)
+		return nil, fmt.Errorf("%w: %s", consts.ErrPlanPeriodFormatError, plan.Period)
 	}
 	limit := &model.ApiLimit{}
 
@@ -154,7 +155,7 @@ func (s *SetupService) ParsePlanLimit(plan *model.PlanInfo) (*model.ApiLimit, er
 	numberStr := periodStr[:len(periodStr)-1] // 获取数字部分
 	number, err := strconv.Atoi(numberStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid period number: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrInvalidPeriodNumber, err)
 	}
 
 	// 根据单位转换为 time.Duration
@@ -166,7 +167,7 @@ func (s *SetupService) ParsePlanLimit(plan *model.PlanInfo) (*model.ApiLimit, er
 	case "y":
 		limit.ExpireDays = 365 // 按365天计算
 	default:
-		return nil, fmt.Errorf("unsupported period unit: %s", unit)
+		return nil, fmt.Errorf("%w: %s", consts.ErrUnsupportedPeriodUnit, unit)
 	}
 
 	// plan.usage 必须是：
@@ -261,7 +262,7 @@ func (s *SetupService) createDefaultAdmin() error {
 	// 生成密码哈希
 	pass, cost := []byte(s.cfg.Admin.Password), bcrypt.DefaultCost
 	if data, err := bcrypt.GenerateFromPassword(pass, cost); err != nil {
-		return fmt.Errorf("failed to hash password: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrPasswordEncryptionFailed, err)
 	} else {
 		admin.Password = string(data)
 	}
@@ -281,7 +282,7 @@ func (s *SetupService) createDefaultAdmin() error {
 	}
 
 	if err := s.db.Create(&admin).Error; err != nil {
-		return fmt.Errorf("failed to create admin user: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrCreateAdminUserFailed, err)
 	}
 	return nil
 }
@@ -289,12 +290,19 @@ func (s *SetupService) createDefaultAdmin() error {
 func (s *SetupService) GetPlanLimit(name model.PayPlan) (*model.ApiLimit, error) {
 	plan := &model.PlanInfo{Plan: string(name)}
 	if err := s.GetAsTarget("plan."+plan.Plan, plan); err != nil {
-		return nil, fmt.Errorf("Query Plan %v error: %v", plan.Plan, err)
+		log.Println("[SETUP] GetAsTarget error: ", err.Error())
+		return nil, fmt.Errorf("%w: %s", consts.ErrPlanNotFound, plan.Plan)
 	}
 	if !plan.Enabled {
+		log.Println("[SETUP] GetPlanLimit error: ", "not enabled")
 		return nil, fmt.Errorf("Plan %v is not enabled", plan.Plan)
 	}
-	return s.ParsePlanLimit(plan)
+	if limit, err := s.ParsePlanLimit(plan); err != nil {
+		log.Println("[SETUP] GetPlanLimit error: ", err.Error())
+		return nil, fmt.Errorf("%w: %v", consts.ErrParsePlanLimitFailed, err)
+	} else {
+		return limit, nil
+	}
 }
 
 func (s *SetupService) GetDefaultPlan() []model.PlanInfo {

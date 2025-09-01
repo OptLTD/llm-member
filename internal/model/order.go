@@ -45,6 +45,7 @@ type OrderModel struct {
 
 	UserID  uint64  `json:"userId" gorm:"column:user_id;index;not null"`
 	OrderID string  `json:"orderId" gorm:"column:order_id;type:varchar(64);uniqueIndex;not null"`
+	ThridID string  `json:"thridId" gorm:"column:thrid_id;type:varchar(64);"`
 	PayPlan PayPlan `json:"payPlan" gorm:"column:pay_plan;type:varchar(20)"`
 	Amount  float64 `json:"amount" gorm:"column:amount;type:double;not null"`
 	Method  method  `json:"method" gorm:"column:method;type:varchar(20)"`

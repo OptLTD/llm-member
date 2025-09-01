@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"llm-member/internal/config"
+	"llm-member/internal/consts"
 	"llm-member/internal/model"
 
 	"github.com/go-pay/gopay"
@@ -25,18 +26,18 @@ type WechatPayment struct {
 func NewWechatPayment() (*WechatPayment, error) {
 	provider := config.GetWechatProvider()
 	if provider == nil {
-		return nil, fmt.Errorf("wechat payment provider not configured")
+		return nil, consts.ErrPaymentProviderNotConfigured
 	}
 
 	// 验证必要的配置参数
 	if provider.MchID == "" || provider.SerialNo == "" || provider.APIv3Key == "" || provider.PrivateKey == "" {
-		return nil, fmt.Errorf("wechat payment v3 configuration incomplete")
+		return nil, consts.ErrPaymentConfigIncomplete
 	}
 
 	// 创建微信支付v3客户端
 	client, err := wechat.NewClientV3(provider.MchID, provider.SerialNo, provider.APIv3Key, provider.PrivateKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create wechat v3 client: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrPaymentClientCreationFailed, err)
 	}
 
 	// 启用自动验签（使用平台证书自动获取）
@@ -91,13 +92,13 @@ func (w *WechatPayment) Create(order *model.OrderModel) error {
 	wxRsp, err := w.client.V3TransactionJsapi(context.Background(), bodyMap)
 	if err != nil {
 		log.Printf("[wechat][%s] payment creation failed: %v", order.OrderID, err)
-		return fmt.Errorf("failed to create wechat payment: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrPaymentCreationFailed, err)
 	}
 
 	// 检查响应状态
 	if wxRsp.Code != 200 {
 		log.Printf("[wechat][%s] payment creation error: %s", order.OrderID, wxRsp.Error)
-		return fmt.Errorf("wechat payment error: %s", wxRsp.Error)
+		return fmt.Errorf("%w: %s", consts.ErrPaymentError, wxRsp.Error)
 	}
 
 	log.Printf("[wechat][%s] payment created successfully, prepay_id: %s", order.OrderID, wxRsp.Response.PrepayId)
@@ -106,7 +107,7 @@ func (w *WechatPayment) Create(order *model.OrderModel) error {
 	jsapi, err := w.client.PaySignOfJSAPI(w.config.AppID, wxRsp.Response.PrepayId)
 	if err != nil {
 		log.Printf("[wechat][%s] failed to generate JSAPI pay sign: %v", order.OrderID, err)
-		return fmt.Errorf("failed to generate pay sign: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrPaymentSignGenerationFailed, err)
 	}
 
 	// 更新订单状态
@@ -127,13 +128,13 @@ func (w *WechatPayment) Query(order *model.OrderModel) error {
 	)
 	if err != nil {
 		log.Printf("[wechat][%s] payment query failed: %v", order.OrderID, err)
-		return fmt.Errorf("failed to query wechat payment: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrPaymentQueryFailed, err)
 	}
 
 	// 检查响应状态
 	if wxRsp.Code != 200 {
 		log.Printf("[wechat][%s] payment query error: %s", order.OrderID, wxRsp.Error)
-		return fmt.Errorf("wechat payment query error: %s", wxRsp.Error)
+		return fmt.Errorf("%w: %s", consts.ErrPaymentQueryError, wxRsp.Error)
 	}
 
 	// 根据微信返回的交易状态更新订单状态
@@ -176,13 +177,13 @@ func (w *WechatPayment) Close(order *model.OrderModel) error {
 	wxRsp, err := w.client.V3TransactionCloseOrder(context.Background(), order.OrderID)
 	if err != nil {
 		log.Printf("[wechat][%s] payment close failed: %v", order.OrderID, err)
-		return fmt.Errorf("failed to close wechat payment: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrPaymentCloseFailed, err)
 	}
 
 	// 检查响应状态
 	if wxRsp.Code != 204 { // 关闭订单成功返回204
 		log.Printf("[wechat][%s] payment close error: %s", order.OrderID, wxRsp.Error)
-		return fmt.Errorf("wechat payment close error: %s", wxRsp.Error)
+		return fmt.Errorf("%w: %s", consts.ErrPaymentCloseError, wxRsp.Error)
 	}
 
 	log.Printf("[wechat][%s] payment closed successfully", order.OrderID)
@@ -208,13 +209,13 @@ func (w *WechatPayment) Refund(order *model.OrderModel) error {
 	wxRsp, err := w.client.V3Refund(context.Background(), bodyMap)
 	if err != nil {
 		log.Printf("[wechat][%s] refund failed: %v", order.OrderID, err)
-		return fmt.Errorf("failed to process wechat refund: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrPaymentRefundFailed, err)
 	}
 
 	// 检查响应状态
 	if wxRsp.Code != 200 {
 		log.Printf("[wechat][%s] refund error: %s", order.OrderID, wxRsp.Error)
-		return fmt.Errorf("wechat refund error: %s", wxRsp.Error)
+		return fmt.Errorf("%w: %s", consts.ErrPaymentRefundError, wxRsp.Error)
 	}
 
 	log.Printf("[wechat][%s] refund processed successfully, refund_id: %s", order.OrderID, wxRsp.Response.RefundId)
@@ -226,5 +227,5 @@ func (w *WechatPayment) Refund(order *model.OrderModel) error {
 func (w *WechatPayment) Webhook(req *http.Request) (*Event, error) {
 	// TODO: 实现微信支付webhook验证逻辑
 	log.Printf("[wechat] webhook verification not implemented")
-	return nil, fmt.Errorf("wechat webhook verification not implemented")
+	return nil, consts.ErrPaymentWebhookNotImplemented
 }

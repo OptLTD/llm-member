@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"llm-member/internal/config"
+	"llm-member/internal/consts"
 	"llm-member/internal/model"
 	"llm-member/internal/support"
 
@@ -70,7 +71,7 @@ func (s *UserService) ValidatePassword(hashedPassword, password string) bool {
 func (s *UserService) UpdateUser(req *model.UpdateUserRequest) (*model.UserModel, error) {
 	var user model.UserModel
 	if err := s.db.First(&user, req.UserId).Error; err != nil {
-		return nil, fmt.Errorf("用户不存在")
+		return nil, consts.ErrUserNotFound
 	}
 
 	// 更新字段
@@ -78,7 +79,7 @@ func (s *UserService) UpdateUser(req *model.UpdateUserRequest) (*model.UserModel
 		// 检查邮箱是否已被其他用户使用
 		var existingUser model.UserModel
 		if err := s.db.Where("email = ? AND id != ?", req.Email, req.UserId).First(&existingUser).Error; err == nil {
-			return nil, fmt.Errorf("邮箱已被使用")
+			return nil, consts.ErrEmailAlreadyUsed
 		}
 		user.Email = req.Email
 	}
@@ -92,7 +93,7 @@ func (s *UserService) UpdateUser(req *model.UpdateUserRequest) (*model.UserModel
 	}
 
 	if err := s.db.Save(&user).Error; err != nil {
-		return nil, fmt.Errorf("用户更新失败: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrUserUpdateFailed, err)
 	}
 
 	user.Password = ""
@@ -103,18 +104,18 @@ func (s *UserService) UpdateUser(req *model.UpdateUserRequest) (*model.UserModel
 func (s *UserService) RegenerateKey(userID uint64) (*model.UserModel, error) {
 	var user model.UserModel
 	if err := s.db.First(&user, userID).Error; err != nil {
-		return nil, fmt.Errorf("用户不存在")
+		return nil, consts.ErrUserNotFound
 	}
 
 	// 生成新的 API Key
 	apiKey, err := support.GenerateAPIKey()
 	if err != nil {
-		return nil, fmt.Errorf("API Key 生成失败: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrAPIKeyGenerationFailed, err)
 	}
 
 	user.APIKey = apiKey
 	if err := s.db.Save(&user).Error; err != nil {
-		return nil, fmt.Errorf("API Key 更新失败: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrAPIKeyUpdateFailed, err)
 	}
 
 	user.Password = ""
@@ -151,12 +152,12 @@ func (s *UserService) GetUserOrders(userID uint64) ([]model.OrderModel, error) {
 func (s *UserService) ToggleUserStatus(userID uint, isActive bool) error {
 	var user model.UserModel
 	if err := s.db.First(&user, userID).Error; err != nil {
-		return fmt.Errorf("用户不存在")
+		return consts.ErrUserNotFound
 	}
 
 	user.IsActive = isActive
 	if err := s.db.Save(&user).Error; err != nil {
-		return fmt.Errorf("用户状态更新失败: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrUserStatusUpdateFailed, err)
 	}
 
 	return nil

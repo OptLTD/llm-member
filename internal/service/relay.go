@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"llm-member/internal/config"
+	"llm-member/internal/consts"
 	"llm-member/internal/model"
 
 	"github.com/google/uuid"
@@ -90,12 +91,12 @@ func (s *RelayService) GetAPIConfig(model string) (*APIConfig, error) {
 		}
 	}
 	if apiConfig.Provider == "unknown" {
-		return nil, fmt.Errorf("unsupported model: %s", model)
+		return nil, fmt.Errorf("%w: %s", consts.ErrUnsupportedModel, model)
 	}
 
 	if provider := config.GetProvider(apiConfig.Provider); provider == nil {
 		fmt.Printf("[LLM] Provider %s not found in config\n", provider)
-		return nil, fmt.Errorf("provider %s not configured", provider)
+		return nil, fmt.Errorf("%w: %s", consts.ErrProviderNotConfigured, provider)
 	} else {
 		apiConfig.APIKey = provider.APIKey
 		apiConfig.BaseURL = provider.BaseURL
@@ -366,7 +367,7 @@ func (s *RelayService) callWithHTTP(ctx context.Context, req *model.ChatRequest,
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API error: %s", string(body))
+		return nil, fmt.Errorf("%w: %s", consts.ErrAPIError, string(body))
 	}
 
 	// 解析响应
@@ -512,7 +513,7 @@ func (s *RelayService) streamWithHTTP(ctx context.Context, req *model.ChatReques
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		errorChan <- fmt.Errorf("API error: %s", string(body))
+		errorChan <- fmt.Errorf("%w: %s", consts.ErrAPIError, string(body))
 		return
 	}
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"llm-member/internal/config"
+	"llm-member/internal/consts"
 	"llm-member/internal/model"
 	"llm-member/internal/support"
 
@@ -57,17 +58,17 @@ func (s *AuthService) SignIn(username, password string) (string, *model.UserMode
 	// 获取用户信息
 	user, err := s.userS.GetUserByUsername(username)
 	if err != nil {
-		return "", nil, fmt.Errorf("用户名或密码错误")
+		return "", nil, consts.ErrInvalidCredentials
 	}
 
 	// 检查用户是否激活
 	if !user.IsActive {
-		return "", nil, fmt.Errorf("用户账户已被禁用")
+		return "", nil, consts.ErrUserAccountDisabled
 	}
 
 	// 检查用户是否激活
 	if !user.Verified {
-		return "", nil, fmt.Errorf("未验证用户账户")
+		return "", nil, consts.ErrUserAccountNotVerified
 	}
 
 	// 验证密码
@@ -90,7 +91,7 @@ func (s *AuthService) SignIn(username, password string) (string, *model.UserMode
 
 	err = s.SetToken(token, tokenInfo)
 	if err != nil {
-		return "", nil, fmt.Errorf("存储token失败: %v", err)
+		return "", nil, fmt.Errorf("%w: %v", consts.ErrTokenStorageFailed, err)
 	}
 
 	// 清除密码字段
@@ -108,19 +109,19 @@ func (s *AuthService) SignUp(req *model.SignUpRequest) (*model.UserModel, error)
 	// 检查用户名是否已存在
 	existingUser, err := s.userS.GetUserByUsername(req.Username)
 	if err == nil && existingUser != nil {
-		return nil, fmt.Errorf("用户名已存在")
+		return nil, consts.ErrUsernameAlreadyExists
 	}
 
 	// 检查邮箱是否已存在
 	existingUser, err = s.userS.GetUserByEmail(req.Email)
 	if err == nil && existingUser != nil {
-		return nil, fmt.Errorf("邮箱已存在")
+		return nil, consts.ErrEmailAlreadyExists
 	}
 
 	// 生成密码哈希
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, fmt.Errorf("密码加密失败: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrPasswordEncryptionFailed, err)
 	}
 
 	// 生成 API Key
@@ -136,7 +137,7 @@ func (s *AuthService) SignUp(req *model.SignUpRequest) (*model.UserModel, error)
 		UserRole: model.RoleUser, UserPlan: model.PlanBasic,
 	}
 	if err := s.userS.CreateUser(user); err != nil {
-		return nil, fmt.Errorf("创建用户失败: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrUserCreationFailed, err)
 	}
 	return user, nil
 }
@@ -150,10 +151,10 @@ func (s *AuthService) VerifySignupCode(code string) error {
 	var reset model.VerifyModel
 	var query = s.conn.Where("token = ?", code)
 	if err := query.First(&reset).Error; err != nil {
-		return fmt.Errorf("无效的验证码")
+		return consts.ErrInvalidVerificationCode
 	}
 	if reset.ExpireAt.Before(time.Now()) {
-		return fmt.Errorf("验证码已过期")
+		return consts.ErrVerificationCodeExpired
 	}
 
 	user, err := s.userS.GetUserByEmail(reset.Email)
@@ -162,10 +163,10 @@ func (s *AuthService) VerifySignupCode(code string) error {
 	}
 	user.Verified = true
 	if err := s.conn.Save(&user).Error; err != nil {
-		return fmt.Errorf("邮箱验证失败: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrEmailVerificationFailed, err)
 	}
 	if err := s.conn.Delete(&reset).Error; err != nil {
-		return fmt.Errorf("删除验证码失败: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrVerificationCodeDeletionFailed, err)
 	}
 	return nil
 }
@@ -173,7 +174,7 @@ func (s *AuthService) VerifySignupCode(code string) error {
 func (s *AuthService) GenerateSignupCode(email string) (*model.VerifyModel, error) {
 	reset := &model.VerifyModel{Email: email}
 	if token, err := s.generateToken(); err != nil {
-		return nil, fmt.Errorf("验证码生成失败: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrVerificationCodeGenerationFailed, err)
 	} else {
 		reset.Token = token
 		reset.ExpireAt = time.Now().Add(10 * time.Minute)
@@ -193,7 +194,7 @@ func (s *AuthService) ValidateSigninToken(token string) (*TokenInfo, bool) {
 func (s *AuthService) ValidateAPIKey(apiKey string) (*model.UserModel, error) {
 	user, err := s.userS.GetUserByAPIKey(apiKey)
 	if err != nil {
-		return nil, fmt.Errorf("无效的 API Key")
+		return nil, consts.ErrInvalidAPIKey
 	}
 
 	return user, nil
@@ -203,7 +204,7 @@ func (s *AuthService) ValidateAPIKey(apiKey string) (*model.UserModel, error) {
 func (s *AuthService) GetUserFromSigninToken(token string) (*model.UserModel, error) {
 	tokenInfo, valid := s.ValidateSigninToken(token)
 	if !valid {
-		return nil, fmt.Errorf("无效的 token")
+		return nil, consts.ErrInvalidToken
 	}
 
 	user, err := s.userS.GetUserByID(tokenInfo.UserID)
@@ -229,7 +230,7 @@ func (s *AuthService) ForgotPassword(email string) (*model.VerifyModel, error) {
 	// 检查用户是否存在
 	user, err := s.userS.GetUserByEmail(email)
 	if err != nil {
-		return nil, fmt.Errorf("该邮箱未注册")
+		return nil, consts.ErrEmailNotRegistered
 	}
 
 	// 检查用户是否激活
@@ -240,7 +241,7 @@ func (s *AuthService) ForgotPassword(email string) (*model.VerifyModel, error) {
 	// 生成重置token
 	reset := &model.VerifyModel{Email: email}
 	if token, err := s.generateToken(); err != nil {
-		return nil, fmt.Errorf("重置码生成失败: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrResetCodeGenerationFailed, err)
 	} else {
 		reset.Token = token
 		reset.ExpireAt = time.Now().Add(30 * time.Minute) // 30分钟有效期
@@ -261,11 +262,11 @@ func (s *AuthService) ForgotPassword(email string) (*model.VerifyModel, error) {
 func (s *AuthService) VerifyResetCode(code string) (*model.VerifyModel, error) {
 	var reset model.VerifyModel
 	if err := s.conn.Where("token = ?", code).First(&reset).Error; err != nil {
-		return nil, fmt.Errorf("无效的重置码")
+		return nil, consts.ErrInvalidResetCode
 	}
 
 	if reset.ExpireAt.Before(time.Now()) {
-		return nil, fmt.Errorf("重置码已过期")
+		return nil, consts.ErrResetCodeExpired
 	}
 
 	return &reset, nil
@@ -288,13 +289,13 @@ func (s *AuthService) ResetPassword(code, newPassword string) error {
 	// 生成新密码哈希
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return fmt.Errorf("密码加密失败: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrPasswordEncryptionFailed, err)
 	}
 
 	// 更新用户密码
 	user.Password = string(hashedPassword)
 	if err := s.conn.Save(user).Error; err != nil {
-		return fmt.Errorf("密码更新失败: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrPasswordUpdateFailed, err)
 	}
 
 	// 删除已使用的重置记录
@@ -342,18 +343,18 @@ func (s *AuthService) SetToken(token string, tokenInfo *TokenInfo) error {
 	ctx := context.Background()
 	tokenData, err := json.Marshal(tokenInfo)
 	if err != nil {
-		return fmt.Errorf("序列化token信息失败: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrTokenSerializationFailed, err)
 	}
 
 	// 计算过期时间
 	expiration := time.Until(tokenInfo.Expiry)
 	if expiration <= 0 {
-		return fmt.Errorf("token已过期")
+		return consts.ErrTokenExpired
 	}
 
 	err = s.redis.Set(ctx, "token:"+token, tokenData, expiration).Err()
 	if err != nil {
-		return fmt.Errorf("Redis存储token失败: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrRedisTokenStorageFailed, err)
 	}
 	return nil
 }
@@ -440,7 +441,7 @@ func (s *AuthService) GenerateCallbackToken(user *model.UserModel) (string, erro
 
 	err = s.SetToken(token, tokenInfo)
 	if err != nil {
-		return "", fmt.Errorf("存储临时token失败: %v", err)
+		return "", fmt.Errorf("%w: %v", consts.ErrTokenGenerationFailed, err)
 	}
 
 	return token, nil

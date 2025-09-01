@@ -2,6 +2,7 @@ package payment
 
 import (
 	"fmt"
+	"llm-member/internal/consts"
 	"llm-member/internal/model"
 	"net/http"
 )
@@ -40,6 +41,6 @@ func NewPayment(method model.PaymentMethod) (IPayment, error) {
 	case "mock":
 		return &MockPayment{}, nil
 	default:
-		return nil, fmt.Errorf("payment method %s not supported", method)
+		return nil, fmt.Errorf("%w: %s", consts.ErrPaymentMethodNotSupported, method)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"llm-member/internal/config"
+	"llm-member/internal/consts"
 	"llm-member/internal/model"
 )
 
@@ -25,36 +26,6 @@ type CreemPayment struct {
 	client *http.Client
 
 	baseURL string // Creem API基础URL
-}
-
-// CreemCustomer 客户信息结构
-type CreemCustomer struct {
-	ID    string `json:"id,omitempty"`
-	Email string `json:"email,omitempty"`
-}
-
-// CreemCreateCustomerRequest 创建客户请求结构
-type CreemCreateCustomerRequest struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
-}
-
-// CreemCreateCustomerResponse 创建客户响应结构
-type CreemCreateCustomerResponse struct {
-	ID     string `json:"id"`
-	Email  string `json:"email"`
-	Object string `json:"object"`
-}
-
-// CreemCheckoutRequest Creem创建支付请求结构
-type CreemCheckoutRequest struct {
-	RequestID  string `json:"request_id"`
-	ProductID  string `json:"product_id"`
-	SuccessURL string `json:"success_url,omitempty"`
-	Metadata   object `json:"metadata,omitempty"`
-	Units      int    `json:"units,omitempty"`
-	// customer
-	Customer *CreemCustomer `json:"customer,omitempty"`
 }
 
 // CreemOrder 订单信息结构
@@ -77,8 +48,53 @@ type CreemOrder struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// CreemCheckoutResponse Creem创建支付响应结构
-type CreemCheckoutResponse struct {
+// CreemCustomer 客户信息结构
+type CreemCustomer struct {
+	ID    string `json:"id,omitempty"`
+	Email string `json:"email,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Mode  string `json:"mode,omitempty"`
+
+	Object  string `json:"object,omitempty"`
+	Country string `json:"country,omitempty"`
+
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+}
+
+// 添加产品信息结构体
+type CreemProduct struct {
+	ID                string    `json:"id"`
+	Object            string    `json:"object"`
+	Name              string    `json:"name"`
+	Description       string    `json:"description"`
+	ImageURL          string    `json:"image_url"`
+	Price             int       `json:"price"`
+	Currency          string    `json:"currency"`
+	BillingType       string    `json:"billing_type"`
+	BillingPeriod     string    `json:"billing_period"`
+	Status            string    `json:"status"`
+	TaxMode           string    `json:"tax_mode"`
+	TaxCategory       string    `json:"tax_category"`
+	DefaultSuccessURL *string   `json:"default_success_url"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	Mode              string    `json:"mode"`
+}
+
+// CreemCheckoutReq Creem创建支付请求结构
+type CreemCheckoutReq struct {
+	RequestID  string `json:"request_id"`
+	ProductID  string `json:"product_id"`
+	SuccessURL string `json:"success_url,omitempty"`
+	Metadata   object `json:"metadata,omitempty"`
+	Units      int    `json:"units,omitempty"`
+	// customer
+	Customer *CreemCustomer `json:"customer,omitempty"`
+}
+
+// CreemCheckoutRes Creem创建支付响应结构
+type CreemCheckoutRes struct {
 	ID          string `json:"id"`
 	Mode        string `json:"mode"`
 	Object      string `json:"object"`
@@ -94,16 +110,17 @@ type CreemCheckoutResponse struct {
 	Order *CreemOrder `json:"order"`
 }
 
-// CreemCheckoutStatusResponse Creem查询支付状态响应结构
-type CreemCheckoutStatusResponse struct {
-	ID        string `json:"id"`
-	Mode      string `json:"mode"`
-	Object    string `json:"object"`
-	Status    string `json:"status"`
-	RequestID string `json:"request_id"`
-	Product   string `json:"product"`
-	Customer  string `json:"customer"`
-	Metadata  object `json:"metadata"`
+// CreemCheckoutStatus Creem查询支付状态响应结构
+type CreemCheckoutStatus struct {
+	ID        string         `json:"id"`
+	Mode      string         `json:"mode"`
+	Object    string         `json:"object"`
+	Status    string         `json:"status"`
+	RequestID string         `json:"request_id"`
+	Product   *CreemProduct  `json:"product"`  // 改为对象类型
+	Customer  *CreemCustomer `json:"customer"` // 改为对象类型
+	Units     int            `json:"units"`    // 添加缺失的字段
+	Metadata  object         `json:"metadata"`
 	// order
 	Order *CreemOrder `json:"order,omitempty"`
 }
@@ -112,7 +129,7 @@ type CreemCheckoutStatusResponse struct {
 func NewCreemPayment() (IPayment, error) {
 	provider := config.GetPaymentProvider("creem")
 	if provider == nil {
-		return nil, fmt.Errorf("creem payment provider not configured")
+		return nil, consts.ErrPaymentProviderNotConfigured
 	}
 
 	// 根据环境设置baseURL
@@ -132,7 +149,7 @@ func NewCreemPayment() (IPayment, error) {
 
 // Create 创建Creem支付订单
 func (c *CreemPayment) Create(order *model.OrderModel) error {
-	request := CreemCheckoutRequest{
+	request := CreemCheckoutReq{
 		RequestID: order.OrderID,
 		ProductID: c.config.AppID,
 		Customer: &CreemCustomer{
@@ -154,21 +171,22 @@ func (c *CreemPayment) Create(order *model.OrderModel) error {
 	resp, err := c.makeAPIRequest("POST", "/checkouts", request)
 	if err != nil {
 		log.Printf("[creem][%s] payment creation failed: %v", order.OrderID, err)
-		return fmt.Errorf("failed to create creem payment: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrPaymentCreationFailed, err)
 	}
 
-	var checkoutResp CreemCheckoutResponse
+	var checkoutResp CreemCheckoutRes
 	if err := json.Unmarshal(resp, &checkoutResp); err != nil {
 		log.Printf("[creem][%s] failed to parse response: %v", order.OrderID, err)
-		return fmt.Errorf("failed to parse creem response: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrResponseParseFailed, err)
 	}
 
 	// 更新订单信息
 	order.PayURL = checkoutResp.CheckoutURL
+	order.ThridID = checkoutResp.ID
 	order.Status = model.PaymentPending
 	log.Printf(
-		"[creem][%s] payment created successfully, checkout URL: %s",
-		order.OrderID, checkoutResp.CheckoutURL,
+		"[creem][%s][%s] payment created successfully, checkout URL: %s",
+		order.OrderID, order.ThridID, checkoutResp.CheckoutURL,
 	)
 	return nil
 }
@@ -176,12 +194,12 @@ func (c *CreemPayment) Create(order *model.OrderModel) error {
 // Webhook Creem支付回调验证
 func (c *CreemPayment) Webhook(req *http.Request) (*Event, error) {
 	if c.config.WHSEC == "" {
-		return nil, fmt.Errorf("creem webhook verification failed: webhook secret not configured")
+		return nil, consts.ErrWebhookSecretNotConfigured
 	}
 	event, err := c.HandleWebhook(req, c.config.WHSEC)
 	if err != nil {
 		log.Printf("[creem] webhook verification failed: %v", err)
-		return nil, fmt.Errorf("creem webhook verification failed: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrWebhookSignatureVerificationFailed, err)
 	}
 
 	log.Printf("[creem] received webhook event type: %s, id: %s", event.EventType, event.ID)
@@ -276,19 +294,14 @@ func (c *CreemPayment) Webhook(req *http.Request) (*Event, error) {
 // Query 查询Creem支付状态
 func (c *CreemPayment) Query(order *model.OrderModel) error {
 	// 使用checkout session ID查询支付状态
-	// 注意：这里需要存储checkout session ID，或者使用其他方式查询
-	// 由于Creem API可能不支持通过request_id直接查询，这里使用一个假设的endpoint
-	url := fmt.Sprintf("/checkouts/%s", order.OrderID) // 假设可以通过request_id查询
-	resp, err := c.makeAPIRequest("GET", url, nil)
-	if err != nil {
+	var statusResp CreemCheckoutStatus
+	url := fmt.Sprintf("/checkouts?checkout_id=%s", order.ThridID)
+	if resp, err := c.makeAPIRequest("GET", url, nil); err != nil {
 		log.Printf("[creem][%s] payment query failed: %v", order.OrderID, err)
-		return fmt.Errorf("failed to query creem payment: %v", err)
-	}
-
-	var statusResp CreemCheckoutStatusResponse
-	if err := json.Unmarshal(resp, &statusResp); err != nil {
+		return fmt.Errorf("%w: %v", consts.ErrPaymentQueryFailed, err)
+	} else if err := json.Unmarshal(resp, &statusResp); err != nil {
 		log.Printf("[creem][%s] failed to parse query response: %v", order.OrderID, err)
-		return fmt.Errorf("failed to parse creem query response: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrResponseParseFailed, err)
 	}
 
 	// 根据Creem返回的状态更新订单状态
@@ -348,7 +361,7 @@ func (c *CreemPayment) Refund(order *model.OrderModel) error {
 
 	// 检查订单状态是否可以退款
 	if order.Status != model.PaymentSucceed {
-		return fmt.Errorf("order %s cannot be refunded, current status: %s", order.OrderID, order.Status)
+		return fmt.Errorf("%w, current status: %s", consts.ErrOrderCannotBeRefunded, order.Status)
 	}
 
 	// 构建退款请求 - 根据Creem API文档调整
@@ -362,14 +375,14 @@ func (c *CreemPayment) Refund(order *model.OrderModel) error {
 	resp, err := c.makeAPIRequest("POST", "/refunds", refundReq)
 	if err != nil {
 		log.Printf("[creem][%s] refund failed: %v", order.OrderID, err)
-		return fmt.Errorf("failed to process creem refund: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrPaymentRefundFailed, err)
 	}
 
 	// 解析退款响应
 	var refundResp object
 	if err := json.Unmarshal(resp, &refundResp); err != nil {
 		log.Printf("[creem][%s] failed to parse refund response: %v", order.OrderID, err)
-		return fmt.Errorf("failed to parse creem refund response: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrResponseParseFailed, err)
 	}
 
 	// 检查退款状态
@@ -379,7 +392,7 @@ func (c *CreemPayment) Refund(order *model.OrderModel) error {
 		log.Printf("[creem][%s] refund processed successfully", order.OrderID)
 	} else {
 		log.Printf("[creem][%s] refund response: %v", order.OrderID, refundResp)
-		return fmt.Errorf("refund was not successful")
+		return consts.ErrRefundNotSuccessful
 	}
 
 	return nil
@@ -393,7 +406,7 @@ func (c *CreemPayment) makeAPIRequest(method, endpoint string, data any) ([]byte
 	if data != nil {
 		jsonData, err := json.Marshal(data)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal request data: %v", err)
+			return nil, fmt.Errorf("%w: %v", consts.ErrRequestDataMarshalFailed, err)
 		}
 		reqBody = bytes.NewBuffer(jsonData)
 		log.Printf("[creem] API request body: %s", string(jsonData))
@@ -401,7 +414,7 @@ func (c *CreemPayment) makeAPIRequest(method, endpoint string, data any) ([]byte
 
 	req, err := http.NewRequest(method, url, reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrRequestCreationFailed, err)
 	}
 
 	// 设置请求头 - Creem使用x-api-key认证
@@ -414,21 +427,21 @@ func (c *CreemPayment) makeAPIRequest(method, endpoint string, data any) ([]byte
 	// 发送请求
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrRequestSendFailed, err)
 	}
 	defer resp.Body.Close()
 
 	// 读取响应
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrResponseReadFailed, err)
 	}
 
 	log.Printf("[creem] API response status: %d, body: %s", resp.StatusCode, string(body))
 
 	// 检查HTTP状态码
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("%w with status %d: %s", consts.ErrAPIRequestFailed, resp.StatusCode, string(body))
 	}
 
 	return body, nil
@@ -457,7 +470,7 @@ func (c *CreemPayment) HandleWebhook(req *http.Request, webhookSecret string) (*
 	// 读取请求体
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read webhook body: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrWebhookBodyReadFailed, err)
 	}
 
 	// 记录原始webhook数据用于调试
@@ -466,7 +479,7 @@ func (c *CreemPayment) HandleWebhook(req *http.Request, webhookSecret string) (*
 
 	// 验证HTTP方法
 	if req.Method != "POST" {
-		return nil, fmt.Errorf("invalid HTTP method: %s, expected POST", req.Method)
+		return nil, fmt.Errorf("%w: %s", consts.ErrInvalidHTTPMethod, req.Method)
 	}
 
 	// 验证Content-Type
@@ -477,22 +490,22 @@ func (c *CreemPayment) HandleWebhook(req *http.Request, webhookSecret string) (*
 
 	// 验证webhook签名
 	if err := c.verifyWebhookSignature(req, body, webhookSecret); err != nil {
-		return nil, fmt.Errorf("webhook signature verification failed: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrWebhookSignatureVerificationFailed, err)
 	}
 
 	// 解析webhook事件
 	var event CreemWebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
 		log.Printf("[creem] failed to parse webhook JSON: %s", string(body))
-		return nil, fmt.Errorf("failed to parse webhook event: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrWebhookEventParseFailed, err)
 	}
 
 	// 验证事件基本字段
 	if event.ID == "" {
-		return nil, fmt.Errorf("webhook event missing required field: id")
+		return nil, consts.ErrWebhookEventMissingID
 	}
 	if event.EventType == "" {
-		return nil, fmt.Errorf("webhook event missing required field: eventType")
+		return nil, consts.ErrWebhookEventMissingEventType
 	}
 
 	// 检查事件时间戳，防止重放攻击（允许5分钟的时间差）
@@ -526,13 +539,13 @@ func (c *CreemPayment) verifyWebhookSignature(req *http.Request, body []byte, we
 		// 尝试其他可能的头名称
 		signatureHeader = req.Header.Get("Creem-Signature")
 		if signatureHeader == "" {
-			return fmt.Errorf("missing webhook signature header 'creem-signature'")
+			return consts.ErrMissingWebhookSignatureHeader
 		}
 	}
 
 	// 验证webhook密钥是否配置
 	if webhookSecret == "" {
-		return fmt.Errorf("webhook secret not configured")
+		return consts.ErrWebhookSecretNotConfigured
 	}
 
 	// 计算期望的签名
@@ -547,8 +560,8 @@ func (c *CreemPayment) verifyWebhookSignature(req *http.Request, body []byte, we
 
 	// 安全比较签名（使用hmac.Equal防止时序攻击）
 	if !hmac.Equal([]byte(signatureHeader), []byte(expectedSignature)) {
-		return fmt.Errorf("signature mismatch: received=%s, expected=%s",
-			signatureHeader, expectedSignature)
+		return fmt.Errorf("%w: received=%s, expected=%s",
+			consts.ErrSignatureMismatch, signatureHeader, expectedSignature)
 	}
 
 	log.Printf("[creem] webhook signature verification successful")

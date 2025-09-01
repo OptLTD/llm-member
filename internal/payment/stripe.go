@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"llm-member/internal/config"
+	"llm-member/internal/consts"
 	"llm-member/internal/model"
 )
 
@@ -18,7 +19,7 @@ type StripePayment struct {
 func NewStripePayment() (IPayment, error) {
 	provider := config.GetPaymentProvider("stripe")
 	if provider == nil {
-		return nil, fmt.Errorf("stripe payment provider not configured")
+		return nil, consts.ErrPaymentProviderNotConfigured
 	}
 
 	return &StripePayment{
@@ -85,5 +86,5 @@ func (s *StripePayment) Refund(order *model.OrderModel) error {
 func (s *StripePayment) Webhook(req *http.Request) (*Event, error) {
 	// TODO: 实现Stripe webhook验证逻辑
 	log.Printf("[stripe] webhook verification not implemented")
-	return nil, fmt.Errorf("stripe webhook verification not implemented")
+	return nil, consts.ErrPaymentWebhookNotImplemented
 }

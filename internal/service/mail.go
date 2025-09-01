@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"llm-member/internal/config"
+	"llm-member/internal/consts"
 	"llm-member/internal/model"
 	"log"
 	"net"
@@ -40,7 +41,7 @@ func (s *MailService) SendSigninCodeEmail(token *model.VerifyModel) error {
 
 	body, err := s.GetTemplate("mail.signin", templateData)
 	if err != nil {
-		return fmt.Errorf("failed to load email template: %w", err)
+		return fmt.Errorf("%w: %w", consts.ErrEmailTemplateLoadFailed, err)
 	}
 
 	return s.Send([]string{token.Email}, subject, body.String())
@@ -65,7 +66,7 @@ func (s *MailService) SendSignupCodeEmail(token *model.VerifyModel) error {
 
 	body, err := s.GetTemplate("mail.signup", templateData)
 	if err != nil {
-		return fmt.Errorf("failed to load email template: %w", err)
+		return fmt.Errorf("%w: %w", consts.ErrEmailTemplateLoadFailed, err)
 	}
 
 	return s.Send([]string{token.Email}, subject, body.String())
@@ -84,7 +85,7 @@ func (s *MailService) SendResetCodeEmail(token *model.VerifyModel) error {
 
 	body, err := s.GetTemplate("mail.reset", templateData)
 	if err != nil {
-		return fmt.Errorf("failed to load email template: %w", err)
+		return fmt.Errorf("%w: %w", consts.ErrEmailTemplateLoadFailed, err)
 	}
 
 	return s.Send([]string{token.Email}, subject, body.String())
@@ -105,7 +106,7 @@ func (self *MailService) Send(to []string, title string, body string) (err error
 	auth := smtp.PlainAuth("", self.mail.UserName, self.mail.Password, host)
 	if auth == nil {
 		log.Println("smpt auth error:", err)
-		return fmt.Errorf("smpt auth error:")
+		return fmt.Errorf("%w", consts.ErrSMTPAuthError)
 	}
 	if ok, _ := client.Extension("AUTH"); ok {
 		if err = client.Auth(auth); err != nil {
@@ -179,7 +180,7 @@ func (self *MailService) GetTemplate(path string, data map[string]any) (*bytes.B
 
 	// 检查模板文件是否存在
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return body, fmt.Errorf("template file not found: %s", filePath)
+		return body, fmt.Errorf("%w: %s", consts.ErrTemplateFileNotFound, filePath)
 	}
 
 	// 解析模板文件

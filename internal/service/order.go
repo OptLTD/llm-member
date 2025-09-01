@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"llm-member/internal/config"
+	"llm-member/internal/consts"
 	"llm-member/internal/model"
 	"llm-member/internal/payment"
 
@@ -18,6 +19,37 @@ import (
 // OrderService 支付服务
 type OrderService struct {
 	db *gorm.DB
+}
+
+// handlePaymentError 处理支付相关错误，记录详细信息并返回用户友好错误
+func (s *OrderService) handlePaymentError(provider consts.PaymentProvider, errorType consts.PaymentErrorType, err error, context string) error {
+	if err == nil {
+		return nil
+	}
+
+	// 记录详细错误信息供管理员查看
+	consts.LogDetailedError(provider, errorType, err, context)
+
+	// 返回用户友好的错误信息
+	return consts.GetUserFriendlyError(err)
+}
+
+// getProviderFromMethod 根据支付方式获取提供商类型
+func (s *OrderService) getProviderFromMethod(method model.PaymentMethod) consts.PaymentProvider {
+	switch method {
+	case "stripe":
+		return consts.ProviderStripe
+	case "alipay":
+		return consts.ProviderAlipay
+	case "wechat":
+		return consts.ProviderWechat
+	case "paypal":
+		return consts.ProviderPaypal
+	case "creem":
+		return consts.ProviderCreem
+	default:
+		return consts.PaymentProvider(string(method))
+	}
 }
 
 // NewOrderService 创建支付服务实例
@@ -30,35 +62,36 @@ func NewOrderService() *OrderService {
 func (s *OrderService) CreateOrder(req *model.OrderRequest, plan *model.PlanInfo) (*model.OrderModel, error) {
 	// 检查支付方式是否可用
 	if !config.HasPaymentProvider(string(req.Method)) {
-		return nil, fmt.Errorf("支付方式 %s 未启用", req.Method)
+		return nil, fmt.Errorf("%w %s", consts.ErrPaymentMethodNotEnabled, req.Method)
 	}
-	// 生成订单ID
-	orderID, err := s.generateOrderID()
-	if err != nil {
-		return nil, fmt.Errorf("生成订单ID失败: %v", err)
-	}
-
-	// 创建订单记录
+	// 生成订单ID, 创建订单记录
 	order := &model.OrderModel{
-		OrderID: orderID, UserID: *req.UserId,
+		UserID:  *req.UserId,
 		PayPlan: req.PayPlan, Amount: *req.Amount,
 		Method: req.Method, Status: model.PaymentPending,
 		ExpiredAt: time.Now().Add(30 * time.Minute), // 30分钟过期
 	}
+	if orderID, err := s.generateOrderID(); err != nil {
+		return nil, fmt.Errorf("%w: %v", consts.ErrOrderIDGenerationFailed, err)
+	} else {
+		order.OrderID = orderID
+	}
+
 	// 保存订单到数据库
-	if err = s.db.Create(order).Error; err != nil {
-		return nil, fmt.Errorf("保存订单失败: %v", err)
+	if err := s.db.Create(order).Error; err != nil {
+		return nil, fmt.Errorf("%w: %v", consts.ErrOrderSaveFailed, err)
 	}
 	// 支付订单
+	providerType := s.getProviderFromMethod(req.Method)
 	provider, err := payment.NewPayment(req.Method)
 	if err != nil {
-		return nil, fmt.Errorf("创建支付实例失败: %v", err)
+		return nil, s.handlePaymentError(providerType, consts.ErrorTypeConfig, err, "create payment provider instance")
 	}
 	if err = provider.Create(order); err != nil {
-		return nil, fmt.Errorf("创建支付订单失败: %v", err)
+		return nil, s.handlePaymentError(providerType, consts.ErrorTypeCreation, err, "create payment order")
 	}
 	if err = s.db.Save(order).Error; err != nil {
-		return nil, fmt.Errorf("保存订单失败: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrOrderSaveFailed, err)
 	}
 	return order, nil
 }
@@ -75,48 +108,48 @@ func (s *OrderService) FindOrder(orderID string) (*model.OrderModel, error) {
 // VerifyCallback 验证支付回调
 func (s *OrderService) VerifyCallback(name string, req *http.Request) (*model.OrderModel, error) {
 	method := model.PaymentMethod(name)
+	providerType := s.getProviderFromMethod(method)
 	provider, err := payment.NewPayment(method)
 	if err != nil {
-		return nil, fmt.Errorf("创建支付实例失败: %v", err)
+		return nil, s.handlePaymentError(providerType, consts.ErrorTypeConfig, err, "create payment provider instance for webhook")
 	}
 
+	var orderId string
 	// 使用支付提供商的Webhook方法验证回调
-	event, err := provider.Webhook(req)
-	if err != nil {
-		return nil, fmt.Errorf("支付回调验证失败: %v", err)
-	}
-	// 记录webhook事件信息
-	if event != nil {
-		log.Printf("[webhook] 收到支付事件: Type=%s, OrderID=%s, Status=%s, Amount=%.2f",
-			event.Type, event.OrderID, event.Status, event.Amount)
-	}
-
-	// 根据事件中的OrderID查找订单
-	if event == nil || event.OrderID == "" {
-		return nil, fmt.Errorf("webhook事件中缺少订单ID")
+	if event, err := provider.Webhook(req); err != nil {
+		return nil, s.handlePaymentError(providerType, consts.ErrorTypeWebhook, err, "verify payment webhook")
+	} else if event == nil || event.OrderID == "" {
+		// 根据事件中的OrderID查找订单
+		return nil, consts.ErrPaymentWebhookMissingParams
+	} else {
+		orderId = event.OrderID
+		log.Printf(
+			"[webhook] 收到支付事件: Type=%s, OrderID=%s, Status=%s, Amount=%.2f",
+			event.Type, event.OrderID, event.Status, event.Amount,
+		)
 	}
 
-	// 查找订单
-	order, err := s.FindOrder(event.OrderID)
-	if err != nil {
-		return nil, fmt.Errorf("查找订单失败: %v", err)
+	if order, err := s.FindOrder(orderId); err != nil {
+		return nil, fmt.Errorf("%w: %v", consts.ErrOrderQueryFailed, err)
+	} else {
+		return order, nil
 	}
-
-	return order, nil
 }
 
-func (s *OrderService) QueryPayment(name string, data map[string]any) (*model.OrderModel, error) {
-	// method := model.PaymentMethod(name)
-	// provider, err := payment.NewPayment(method)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("创建支付实例失败: %v", err)
-	// }
+func (s *OrderService) QueryPayment(order *model.OrderModel) error {
+	if order.Status != model.PaymentPending {
+		return nil
+	}
 
-	var order *model.OrderModel
-	// if order.Status != model.PaymentPending {
-	// 	return nil
-	// }
-	return order, nil
+	providerType := s.getProviderFromMethod(order.Method)
+	provider, err := payment.NewPayment(order.Method)
+	if err != nil {
+		return s.handlePaymentError(providerType, consts.ErrorTypeConfig, err, "create payment provider instance for query")
+	}
+	if err := provider.Query(order); err != nil {
+		return s.handlePaymentError(providerType, consts.ErrorTypeQuery, err, "query payment status")
+	}
+	return nil
 }
 
 // UpdatePaymentStatus 更新支付状态
@@ -139,7 +172,7 @@ func (s *OrderService) UpdateStatus(orderID string, status string) error {
 func (s *OrderService) PaySuccess(orderId string, limit *model.ApiLimit) error {
 	order, err := s.FindOrder(orderId)
 	if err != nil {
-		return fmt.Errorf("查询订单失败: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrOrderQueryFailed, err)
 	}
 	if order.Status == model.PaymentSucceed {
 		return nil // 已经处理过了
@@ -159,7 +192,7 @@ func (s *OrderService) PaySuccess(orderId string, limit *model.ApiLimit) error {
 	}
 	if err := tx.Model(order).Updates(updateOrder).Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("更新订单状态失败: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrOrderStatusUpdateFailed, err)
 	}
 
 	// 更新用户套餐
@@ -170,7 +203,7 @@ func (s *OrderService) PaySuccess(orderId string, limit *model.ApiLimit) error {
 	var query = tx.Model(&model.UserModel{}).Where("id = ?", order.UserID)
 	if err := query.Updates(updateUser).Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("更新用户套餐失败: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrUserPlanUpdateFailed, err)
 	}
 
 	tx.Commit()

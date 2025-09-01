@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"llm-member/internal/consts"
 	"llm-member/internal/model"
 	"sync"
 
@@ -33,24 +34,24 @@ func (ts *TokenService) CheckUsage(user *model.UserModel) error {
 	switch limit.LimitMethod {
 	case "tokens":
 		if usage.TodayTokens >= limit.DailyTokens {
-			return fmt.Errorf("已达到每日 Token 限制 (%d/%d)", usage.TodayTokens, limit.DailyTokens)
+			return fmt.Errorf("%w (%d/%d)", consts.ErrDailyTokenLimitReached, usage.TodayTokens, limit.DailyTokens)
 		}
 		if usage.TotalTokens >= limit.MonthlyTokens {
-			return fmt.Errorf("已达到每月 Token 限制 (%d/%d)", usage.TotalTokens, limit.MonthlyTokens)
+			return fmt.Errorf("%w (%d/%d)", consts.ErrMonthlyTokenLimitReached, usage.TotalTokens, limit.MonthlyTokens)
 		}
 	case "requests":
 		if usage.TodayRequests >= limit.DailyRequests {
-			return fmt.Errorf("已达到每日请求限制 (%d/%d)", usage.TodayRequests, limit.DailyRequests)
+			return fmt.Errorf("%w (%d/%d)", consts.ErrDailyRequestLimitReached, usage.TodayRequests, limit.DailyRequests)
 		}
 		if usage.TotalRequests >= limit.MonthlyRequests {
-			return fmt.Errorf("已达到每月请求限制 (%d/%d)", usage.TotalRequests, limit.MonthlyRequests)
+			return fmt.Errorf("%w (%d/%d)", consts.ErrMonthlyRequestLimitReached, usage.TotalRequests, limit.MonthlyRequests)
 		}
 	case "projects":
 		if usage.TodayProjects >= limit.DailyProjects {
-			return fmt.Errorf("已达到每日项目限制 (%d/%d)", usage.TodayProjects, limit.DailyProjects)
+			return fmt.Errorf("%w (%d/%d)", consts.ErrDailyProjectLimitReached, usage.TodayProjects, limit.DailyProjects)
 		}
 		if usage.TotalProjects >= limit.MonthlyProjects {
-			return fmt.Errorf("已达到每月项目限制 (%d/%d)", usage.TotalProjects, limit.MonthlyProjects)
+			return fmt.Errorf("%w (%d/%d)", consts.ErrMonthlyProjectLimitReached, usage.TotalProjects, limit.MonthlyProjects)
 		}
 	}
 	return nil

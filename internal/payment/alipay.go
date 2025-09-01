@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"llm-member/internal/config"
+	"llm-member/internal/consts"
 	"llm-member/internal/model"
 
 	"github.com/go-pay/gopay"
@@ -25,13 +26,13 @@ type AlipayPayment struct {
 func NewAlipayPayment() (*AlipayPayment, error) {
 	provider := config.GetPaymentProvider("alipay")
 	if provider == nil {
-		return nil, fmt.Errorf("alipay payment provider not configured")
+		return nil, consts.ErrPaymentProviderNotConfigured
 	}
 
 	// 创建支付宝客户端
 	client, err := alipay.NewClient(provider.AppID, provider.Token, false) // false表示沙箱环境
 	if err != nil {
-		return nil, fmt.Errorf("failed to create alipay client: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrPaymentClientCreationFailed, err)
 	}
 
 	// 设置支付宝公钥证书和根证书（如果有的话）
@@ -61,7 +62,7 @@ func (p *AlipayPayment) Create(order *model.OrderModel) error {
 	payURL, err := p.client.TradeWapPay(context.Background(), bodyMap)
 	if err != nil {
 		log.Printf("[alipay][%s] failed to create payment: %v", order.OrderID, err)
-		return fmt.Errorf("failed to create alipay payment: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrPaymentCreationFailed, err)
 	}
 
 	log.Printf("[alipay][%s] payment created successfully", order.OrderID)
@@ -82,7 +83,7 @@ func (p *AlipayPayment) Query(order *model.OrderModel) error {
 	result, err := p.client.TradeQuery(context.Background(), bodyMap)
 	if err != nil {
 		log.Printf("[alipay][%s] payment query failed: %v", order.OrderID, err)
-		return fmt.Errorf("failed to query alipay payment: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrPaymentQueryFailed, err)
 	}
 
 	// 更新订单状态
@@ -119,7 +120,7 @@ func (p *AlipayPayment) Close(order *model.OrderModel) error {
 	_, err := p.client.TradeClose(context.Background(), bodyMap)
 	if err != nil {
 		log.Printf("[alipay][%s] payment close failed: %v", order.OrderID, err)
-		return fmt.Errorf("failed to close alipay payment: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrPaymentCloseFailed, err)
 	}
 
 	log.Printf("[alipay][%s] payment closed successfully", order.OrderID)
@@ -138,7 +139,7 @@ func (p *AlipayPayment) Refund(order *model.OrderModel) error {
 	_, err := p.client.TradeRefund(context.Background(), bodyMap)
 	if err != nil {
 		log.Printf("[alipay][%s] refund failed: %v", order.OrderID, err)
-		return fmt.Errorf("failed to refund alipay payment: %v", err)
+		return fmt.Errorf("%w: %v", consts.ErrPaymentRefundFailed, err)
 	}
 
 	log.Printf("[alipay][%s] refund processed successfully", order.OrderID)
@@ -150,5 +151,5 @@ func (p *AlipayPayment) Refund(order *model.OrderModel) error {
 func (p *AlipayPayment) Webhook(req *http.Request) (*Event, error) {
 	// TODO: 实现支付宝webhook验证逻辑
 	log.Printf("[alipay] webhook verification not implemented")
-	return nil, fmt.Errorf("alipay webhook verification not implemented")
+	return nil, consts.ErrPaymentWebhookNotImplemented
 }

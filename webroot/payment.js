@@ -464,6 +464,13 @@ class PaymentManager {
     document.getElementById("paymentQR").classList.add("hidden");
     document.getElementById("paymentSuccess").classList.remove("hidden");
     document.getElementById("paymentError").classList.add("hidden");
+    
+    // 移除跳转支付的提示信息
+    const existingRedirect = document.getElementById("paymentRedirect");
+    if (existingRedirect) {
+      existingRedirect.remove();
+    }
+    
     this.stopPaymentCheck();
   }
 

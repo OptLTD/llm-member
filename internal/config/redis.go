@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"llm-member/internal/consts"
 )
 
 // RedisConfig Redis配置
@@ -41,7 +42,7 @@ func GetRedisClient(cfg *RedisConfig) (*redis.Client, error) {
 
 	_, err := rdb.Ping(ctx).Result()
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to redis: %v", err)
+		return nil, fmt.Errorf("%w: %v", consts.ErrRedisConnectionFailed, err)
 	}
 
 	return rdb, nil

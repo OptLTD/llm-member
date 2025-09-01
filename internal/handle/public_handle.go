@@ -4,6 +4,7 @@ import (
 	"embed"
 	"html/template"
 	"llm-member/internal/config"
+	"llm-member/internal/model"
 	"llm-member/internal/service"
 	"net/http"
 	"os"
@@ -46,9 +47,13 @@ func (h *PublicHandle) DoPaymentCallback(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "回调验证失败: " + err.Error()})
 		return
 	}
+	var limit *model.ApiLimit
+	if limit, err = h.setupService.GetPlanLimit(order.PayPlan); err == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "该套餐暂不可用"})
+		return
+	}
 
 	// 标记为支付成功
-	limit, _ := h.setupService.GetPlanLimit(order.PayPlan)
 	err = h.orderService.PaySuccess(order.OrderID, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

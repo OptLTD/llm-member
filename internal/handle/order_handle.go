@@ -170,23 +170,24 @@ func (h *OrderHandler) CreatePaymentOrder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "该套餐暂不可用"})
 		return
 	}
+	if _, err = h.setupService.GetPlanLimit(req.PayPlan); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "该套餐暂不可用"})
+		return
+	}
 
 	// 创建支付订单（这里模拟支付接口）
-	order, err := h.orderService.CreateOrder(&req, &plan)
-	if err != nil {
+	if order, err := h.orderService.CreateOrder(&req, &plan); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建订单失败: " + err.Error()})
-		return
-	}
-	if order == nil {
+	} else if order == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建订单失败: 订单为空"})
-		return
+	} else {
+		response := model.OrderResponse{
+			Amount: order.Amount, QRCode: order.QRCode,
+			OrderID: order.OrderID, PayURL: order.PayURL,
+			Status: string(order.Status), Method: string(order.Method),
+		}
+		c.JSON(http.StatusOK, response)
 	}
-	response := model.OrderResponse{
-		Amount: order.Amount, QRCode: order.QRCode,
-		OrderID: order.OrderID, PayURL: order.PayURL,
-		Status: string(order.Status), Method: string(order.Method),
-	}
-	c.JSON(http.StatusOK, response)
 }
 
 // QueryPaymentOrder 获取支付订单详情
@@ -209,15 +210,15 @@ func (h *OrderHandler) QueryPaymentOrder(c *gin.Context) {
 		return
 	}
 
-	// currStatus := order.Status
-	// err = h.orderService.QueryPayment(order)
-	// if err == nil && currStatus != order.Status {
-	// 	limit, _ := h.setupService.GetPlanLimit(order.PayPlan)
-	// 	err := h.orderService.PaySuccess(c.Param("id"), limit)
-	// 	if err != nil {
-	// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-	// 		return
-	// 	}
-	// }
+	currStatus := order.Status
+	err = h.orderService.QueryPayment(order)
+	if err == nil && currStatus != order.Status {
+		limit, _ := h.setupService.GetPlanLimit(order.PayPlan)
+		err := h.orderService.PaySuccess(c.Param("id"), limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
 	c.JSON(http.StatusOK, order)
 }
