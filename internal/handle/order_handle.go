@@ -32,41 +32,34 @@ func (h *OrderHandler) GetPaymentMethods(c *gin.Context) {
 	methods := []gin.H{}
 
 	// 检查各支付方式是否可用
-	if config.HasPaymentProvider("mock") {
+	if config.HasPayment("mock") {
 		methods = append(methods, gin.H{
 			"method": "mock", "name": "模拟支付",
-			"icon": "fab fa-debug", "color": "#1677FF",
+			"icon": "fab fa-debug", "color": "#E60012",
 		})
 	}
-	if config.HasPaymentProvider("alipay") {
+	if config.HasPayment("alipay") {
 		methods = append(methods, gin.H{
 			"method": "alipay", "name": "支付宝",
 			"icon": "fab fa-alipay", "color": "#1677FF",
 		})
 	}
 
-	if config.HasPaymentProvider("wechat") {
+	if config.HasPayment("wechat") {
 		methods = append(methods, gin.H{
 			"method": "wechat", "name": "微信支付",
 			"icon": "fab fa-weixin", "color": "#07C160",
 		})
 	}
 
-	if config.HasPaymentProvider("union") {
-		methods = append(methods, gin.H{
-			"method": "union", "name": "银联支付",
-			"icon": "fas fa-credit-card", "color": "#E60012",
-		})
-	}
-
-	if config.HasPaymentProvider("stripe") {
+	if config.HasPayment("stripe") {
 		methods = append(methods, gin.H{
 			"method": "stripe", "name": "Stripe",
 			"icon": "fab fa-stripe", "color": "#635BFF",
 		})
 	}
 
-	if config.HasPaymentProvider("creem") {
+	if config.HasPayment("creem") {
 		methods = append(methods, gin.H{
 			"method": "creem", "name": "Creem",
 			"icon": "fas fa-credit-card", "color": "#6366F1",

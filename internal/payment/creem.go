@@ -18,11 +18,9 @@ import (
 	"llm-member/internal/model"
 )
 
-type object = map[string]any
-
 // CreemPayment Creem支付实现
 type CreemPayment struct {
-	config *config.PaymentProvider
+	config *config.Creem
 	client *http.Client
 
 	baseURL string // Creem API基础URL
@@ -95,63 +93,80 @@ type CreemCheckoutReq struct {
 
 // CreemCheckoutRes Creem创建支付响应结构
 type CreemCheckoutRes struct {
-	ID          string `json:"id"`
-	Mode        string `json:"mode"`
-	Object      string `json:"object"`
-	Status      string `json:"status"`
-	RequestID   string `json:"request_id"`
-	Product     string `json:"product"`
-	Units       int    `json:"units"`
-	Customer    string `json:"customer"`
+	ID      string `json:"id"`
+	Mode    string `json:"mode"`
+	Object  string `json:"object"`
+	Status  string `json:"status"`
+	Product string `json:"product"`
+	Units   int    `json:"units"`
+
+	RequestID string `json:"request_id"`
+	Customer  string `json:"customer"`
+	Metadata  object `json:"metadata"`
+
 	CheckoutURL string `json:"checkout_url"`
 	SuccessURL  string `json:"success_url"`
-	Metadata    object `json:"metadata"`
 	// order
 	Order *CreemOrder `json:"order"`
 }
 
 // CreemCheckoutStatus Creem查询支付状态响应结构
 type CreemCheckoutStatus struct {
-	ID        string         `json:"id"`
-	Mode      string         `json:"mode"`
-	Object    string         `json:"object"`
-	Status    string         `json:"status"`
-	RequestID string         `json:"request_id"`
-	Product   *CreemProduct  `json:"product"`  // 改为对象类型
-	Customer  *CreemCustomer `json:"customer"` // 改为对象类型
-	Units     int            `json:"units"`    // 添加缺失的字段
-	Metadata  object         `json:"metadata"`
+	ID     string `json:"id"`
+	Mode   string `json:"mode"`
+	Object string `json:"object"`
+	Status string `json:"status"`
+	Units  int    `json:"units"`
+
+	RequestID string `json:"request_id"`
+	Metadata  object `json:"metadata"`
+	// data
+	Product  *CreemProduct  `json:"product"`
+	Customer *CreemCustomer `json:"customer"`
 	// order
 	Order *CreemOrder `json:"order,omitempty"`
 }
 
 // NewCreemPayment 创建Creem支付实例
-func NewCreemPayment() (IPayment, error) {
-	provider := config.GetPaymentProvider("creem")
-	if provider == nil {
-		return nil, consts.ErrPaymentProviderNotConfigured
-	}
-
-	// 根据环境设置baseURL
-	baseURL := "https://api.creem.io/v1" // 默认生产环境
+func NewCreemPayment() *CreemPayment {
+	baseURL := "https://api.creem.io/v1"
 	if os.Getenv("APP_MODE") != "release" {
-		baseURL = "https://test-api.creem.io/v1" // 非生产环境使用测试URL
+		baseURL = "https://test-api.creem.io/v1"
 	}
 
 	return &CreemPayment{
-		config: provider,
+		baseURL: baseURL,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		baseURL: baseURL,
-	}, nil
+	}
+}
+
+// ensureClientReady 确保客户端已准备就绪
+func (c *CreemPayment) ensureClientReady() error {
+	if c.config != nil {
+		return nil
+	}
+
+	// 获取配置
+	provider := config.GetCreemConfig()
+	if provider == nil {
+		return consts.ErrPaymentProviderNotConfigured
+	}
+
+	c.config = provider
+	return nil
 }
 
 // Create 创建Creem支付订单
 func (c *CreemPayment) Create(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := c.ensureClientReady(); err != nil {
+		return err
+	}
+
 	request := CreemCheckoutReq{
 		RequestID: order.OrderID,
-		ProductID: c.config.AppID,
 		Customer: &CreemCustomer{
 			Email: order.User.Email,
 		},
@@ -165,6 +180,18 @@ func (c *CreemPayment) Create(order *model.OrderModel) error {
 		// 	"http://%s/success?order_id=%s",
 		// 	"localhost", order.OrderID,
 		// ),
+	}
+	switch order.PayPlan {
+	case model.PlanBasic:
+		request.ProductID = c.config.PlanBasicId
+	case model.PlanExtra:
+		request.ProductID = c.config.PlanExtraId
+	case model.PlanUltra:
+		request.ProductID = c.config.PlanUltraId
+	case model.PlanSuper:
+		request.ProductID = c.config.PlanSuperId
+	default:
+		return fmt.Errorf("%w: %v", consts.ErrPaymentPlanNotSupported, order.PayPlan)
 	}
 
 	// 发送HTTP请求到Creem API
@@ -193,10 +220,14 @@ func (c *CreemPayment) Create(order *model.OrderModel) error {
 
 // Webhook Creem支付回调验证
 func (c *CreemPayment) Webhook(req *http.Request) (*Event, error) {
-	if c.config.WHSEC == "" {
+	if err := c.ensureClientReady(); err != nil {
+		return nil, err
+	}
+
+	if c.config.WhSecret == "" {
 		return nil, consts.ErrWebhookSecretNotConfigured
 	}
-	event, err := c.HandleWebhook(req, c.config.WHSEC)
+	event, err := c.HandleWebhook(req, c.config.WhSecret)
 	if err != nil {
 		log.Printf("[creem] webhook verification failed: %v", err)
 		return nil, fmt.Errorf("%w: %v", consts.ErrWebhookSignatureVerificationFailed, err)
@@ -204,30 +235,20 @@ func (c *CreemPayment) Webhook(req *http.Request) (*Event, error) {
 
 	log.Printf("[creem] received webhook event type: %s, id: %s", event.EventType, event.ID)
 
-	// 从webhook数据中提取订单信息
-	orderID := ""
-	amount := 0
-	status := "unknown"
-
-	// 根据事件类型处理不同的数据结构
+	orderID, amount, status := "", 0, "unknown"
 	switch event.EventType {
 	case "checkout.completed", "payment.succeeded", "order.completed":
 		status = "success"
 		// 从事件数据中提取订单ID和金额
-		if data, ok := event.Object["order"].(map[string]interface{}); ok {
-			if id, exists := data["id"].(string); exists {
-				orderID = id
-			}
+		if data, ok := event.Object["order"].(object); ok {
 			if amt, exists := data["amount"].(float64); exists {
 				amount = int(amt)
 			}
 		}
 		// 尝试从metadata中获取订单ID
-		if orderID == "" {
-			if metadata, ok := event.Object["metadata"].(map[string]interface{}); ok {
-				if oid, exists := metadata["order_id"].(string); exists {
-					orderID = oid
-				}
+		if metadata, ok := event.Object["metadata"].(object); ok {
+			if oid, exists := metadata["order_id"].(string); exists {
+				orderID = oid
 			}
 		}
 		// 如果还是没有订单ID，尝试使用request_id
@@ -240,7 +261,7 @@ func (c *CreemPayment) Webhook(req *http.Request) (*Event, error) {
 	case "checkout.failed", "payment.failed", "order.failed":
 		status = "failed"
 		// 同样提取订单信息
-		if metadata, ok := event.Object["metadata"].(map[string]interface{}); ok {
+		if metadata, ok := event.Object["metadata"].(object); ok {
 			if oid, exists := metadata["order_id"].(string); exists {
 				orderID = oid
 			}
@@ -253,7 +274,7 @@ func (c *CreemPayment) Webhook(req *http.Request) (*Event, error) {
 
 	case "checkout.cancelled", "payment.cancelled", "order.cancelled":
 		status = "cancelled"
-		if metadata, ok := event.Object["metadata"].(map[string]interface{}); ok {
+		if metadata, ok := event.Object["metadata"].(object); ok {
 			if oid, exists := metadata["order_id"].(string); exists {
 				orderID = oid
 			}
@@ -268,7 +289,7 @@ func (c *CreemPayment) Webhook(req *http.Request) (*Event, error) {
 		log.Printf("[creem] unknown webhook event type: %s", event.EventType)
 		status = "unknown"
 		// 尝试提取订单ID
-		if metadata, ok := event.Object["metadata"].(map[string]interface{}); ok {
+		if metadata, ok := event.Object["metadata"].(object); ok {
 			if oid, exists := metadata["order_id"].(string); exists {
 				orderID = oid
 			}
@@ -285,14 +306,18 @@ func (c *CreemPayment) Webhook(req *http.Request) (*Event, error) {
 
 	return &Event{
 		Type: event.EventType, Data: event.Object,
-		OrderID: orderID, Status: status,
-		Amount: float64(amount),
-		Time:   event.CreatedAt / 1000,
+		OrderID: orderID, Amount: float64(amount),
+		Status: status, Time: event.CreatedAt / 1000,
 	}, nil
 }
 
 // Query 查询Creem支付状态
 func (c *CreemPayment) Query(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := c.ensureClientReady(); err != nil {
+		return err
+	}
+
 	// 使用checkout session ID查询支付状态
 	var statusResp CreemCheckoutStatus
 	url := fmt.Sprintf("/checkouts?checkout_id=%s", order.ThridID)
@@ -339,6 +364,11 @@ func (c *CreemPayment) Query(order *model.OrderModel) error {
 
 // Close 关闭Creem支付（取消未完成的支付）
 func (c *CreemPayment) Close(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := c.ensureClientReady(); err != nil {
+		return err
+	}
+
 	log.Printf("[creem][%s] attempting to close payment", order.OrderID)
 
 	// Creem可能不支持直接关闭checkout session
@@ -357,6 +387,11 @@ func (c *CreemPayment) Close(order *model.OrderModel) error {
 
 // Refund 处理Creem退款
 func (c *CreemPayment) Refund(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := c.ensureClientReady(); err != nil {
+		return err
+	}
+
 	log.Printf("[creem][%s] processing refund", order.OrderID)
 
 	// 检查订单状态是否可以退款
@@ -419,7 +454,7 @@ func (c *CreemPayment) makeAPIRequest(method, endpoint string, data any) ([]byte
 
 	// 设置请求头 - Creem使用x-api-key认证
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", c.config.Token) // 使用x-api-key认证
+	req.Header.Set("x-api-key", c.config.ApiKey) // 使用x-api-key认证
 	req.Header.Set("User-Agent", "LLM-Member/1.0")
 
 	log.Printf("[creem] API request: %s %s", method, url)

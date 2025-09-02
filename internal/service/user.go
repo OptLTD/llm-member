@@ -78,7 +78,8 @@ func (s *UserService) UpdateUser(req *model.UpdateUserRequest) (*model.UserModel
 	if req.Email != "" {
 		// 检查邮箱是否已被其他用户使用
 		var existingUser model.UserModel
-		if err := s.db.Where("email = ? AND id != ?", req.Email, req.UserId).First(&existingUser).Error; err == nil {
+		var query = s.db.Where("email = ? AND id != ?", req.Email, req.UserId)
+		if err := query.First(&existingUser).Error; err == nil {
 			return nil, consts.ErrEmailAlreadyUsed
 		}
 		user.Email = req.Email
@@ -140,9 +141,9 @@ func (s *UserService) GetUserByID(userID uint64) (*model.UserModel, error) {
 // GetUserByID 根据 ID 获取用户
 func (s *UserService) GetUserOrders(userID uint64) ([]model.OrderModel, error) {
 	var orders []model.OrderModel
-	if err := s.db.Where("user_id = ?", userID).
-		Order("created_at DESC").Limit(12).
-		Find(&orders).Error; err != nil {
+	var query = s.db.Where("user_id = ?", userID).
+		Order("created_at DESC").Limit(12)
+	if err := query.Find(&orders).Error; err != nil {
 		return nil, err
 	}
 	return orders, nil

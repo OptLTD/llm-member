@@ -74,21 +74,8 @@ var internalToUserErrorMap = map[error]error{
 	ErrSignatureMismatch:                  ErrPaymentWebhookError,
 }
 
-// CreatePaymentError 创建带有提供商和错误类型信息的支付错误（用于日志记录）
-func CreatePaymentError(provider PaymentProvider, errorType PaymentErrorType, message string) error {
-	return fmt.Errorf("[%s:%s] %s", provider, errorType, message)
-}
-
-// WrapPaymentError 包装现有错误，添加支付上下文信息（用于日志记录）
-func WrapPaymentError(provider PaymentProvider, errorType PaymentErrorType, err error) error {
-	if err == nil {
-		return nil
-	}
-	return fmt.Errorf("[%s:%s] %w", provider, errorType, err)
-}
-
-// GetUserFriendlyError 将内部错误转换为用户友好的错误信息
-func GetUserFriendlyError(err error) error {
+// GetFriendlyError 将内部错误转换为用户友好的错误信息
+func GetFriendlyError(err error) error {
 	if err == nil {
 		return nil
 	}
@@ -98,10 +85,9 @@ func GetUserFriendlyError(err error) error {
 		return userErr
 	}
 
-	// 检查是否是包装的错误
-	var unwrappedErr error
-	if errors.As(err, &unwrappedErr) {
-		if userErr, exists := internalToUserErrorMap[unwrappedErr]; exists {
+	// 检查是否是包装的错误，遍历所有已知的内部错误类型
+	for internalErr, userErr := range internalToUserErrorMap {
+		if errors.Is(err, internalErr) {
 			return userErr
 		}
 	}

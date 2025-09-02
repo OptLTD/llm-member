@@ -100,7 +100,10 @@ func GetRedis() *redis.Client {
 
 // InitRedis 初始化Redis连接
 func InitRedis(cfg *RedisConfig) error {
-	if cfg == nil || cfg.Host == "" || cfg.Url == "" {
+	if cfg == nil {
+		return nil
+	}
+	if cfg.Host == "" && cfg.Url == "" {
 		return nil
 	}
 	client, err := GetRedisClient(cfg)

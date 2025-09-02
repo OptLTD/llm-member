@@ -19,33 +19,47 @@ import (
 // AlipayPayment 支付宝支付实现
 type AlipayPayment struct {
 	client *alipay.Client
-	config *config.PaymentProvider
+	config *config.Alipay
 }
 
 // NewAlipayPayment 创建支付宝支付实例
-func NewAlipayPayment() (*AlipayPayment, error) {
-	provider := config.GetPaymentProvider("alipay")
+func NewAlipayPayment() *AlipayPayment {
+	return &AlipayPayment{}
+}
+
+// ensureClientReady 确保客户端已准备就绪
+func (p *AlipayPayment) ensureClientReady() error {
+	if p.client != nil && p.config != nil {
+		return nil
+	}
+
+	// 获取配置
+	provider := config.GetAlipayConfig()
 	if provider == nil {
-		return nil, consts.ErrPaymentProviderNotConfigured
+		return consts.ErrPaymentProviderNotConfigured
 	}
 
 	// 创建支付宝客户端
 	client, err := alipay.NewClient(provider.AppID, provider.Token, false) // false表示沙箱环境
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", consts.ErrPaymentClientCreationFailed, err)
+		return fmt.Errorf("%w: %v", consts.ErrPaymentClientCreationFailed, err)
 	}
 
 	// 设置支付宝公钥证书和根证书（如果有的话）
 	// client.SetCertSnFromPath("appCertPublicKey.crt", "alipayRootCert.crt", "alipayCertPublicKey_RSA2.crt")
 
-	return &AlipayPayment{
-		client: client,
-		config: provider,
-	}, nil
+	p.client = client
+	p.config = provider
+	return nil
 }
 
 // Create 创建支付订单
 func (p *AlipayPayment) Create(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := p.ensureClientReady(); err != nil {
+		return err
+	}
+
 	// 生成订单ID
 	orderID := fmt.Sprintf("alipay_%d", time.Now().UnixNano())
 
@@ -76,6 +90,11 @@ func (p *AlipayPayment) Create(order *model.OrderModel) error {
 
 // Query 查询支付状态
 func (p *AlipayPayment) Query(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := p.ensureClientReady(); err != nil {
+		return err
+	}
+
 	// 创建查询请求参数
 	bodyMap := make(gopay.BodyMap)
 	bodyMap.Set("out_trade_no", order.OrderID)
@@ -113,6 +132,11 @@ func (p *AlipayPayment) Query(order *model.OrderModel) error {
 
 // Close 关闭支付订单
 func (p *AlipayPayment) Close(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := p.ensureClientReady(); err != nil {
+		return err
+	}
+
 	// 创建关闭请求参数
 	bodyMap := make(gopay.BodyMap)
 	bodyMap.Set("out_trade_no", order.OrderID)
@@ -130,6 +154,11 @@ func (p *AlipayPayment) Close(order *model.OrderModel) error {
 
 // Refund 退款
 func (p *AlipayPayment) Refund(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := p.ensureClientReady(); err != nil {
+		return err
+	}
+
 	// 创建退款请求参数
 	bodyMap := make(gopay.BodyMap)
 	bodyMap.Set("out_trade_no", order.OrderID)

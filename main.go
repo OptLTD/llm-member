@@ -22,12 +22,9 @@ func main() {
 		log.Println("Warning: .env file not found")
 	}
 
-	cfg := config.Load()
+	var cfg = config.Load()
 	if err := config.InitDB(cfg); err != nil {
 		log.Fatal("Failed to initialize database:", err)
-	}
-	if err := config.InitRedis(cfg.Redis); err != nil {
-		log.Println("Failed to initialize redis:", err)
 	}
 	if err := service.HandleInit(); err != nil {
 		log.Fatal("Failed to initialize data:", err)

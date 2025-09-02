@@ -44,12 +44,12 @@ func (h *PublicHandle) DoPaymentCallback(c *gin.Context) {
 	// 验证支付回调签名
 	order, err := h.orderService.VerifyCallback(c.Param("name"), c.Request)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "回调验证失败: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	var limit *model.ApiLimit
-	if limit, err = h.setupService.GetPlanLimit(order.PayPlan); err == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "该套餐暂不可用"})
+	if limit, err = h.setupService.GetPlanLimit(order.PayPlan); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 

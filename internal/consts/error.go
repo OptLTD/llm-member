@@ -71,6 +71,7 @@ var (
 
 	// 详细的内部错误常量（用于日志记录和开发调试）
 	ErrPaymentProviderNotConfigured       = errors.New("payment provider not configured")
+	ErrPaymentPlanNotSupported            = errors.New("payment plan not supported")
 	ErrPaymentClientCreationFailed        = errors.New("failed to create payment client")
 	ErrPaymentCreationFailed              = errors.New("failed to create payment")
 	ErrPaymentQueryFailed                 = errors.New("failed to query payment")

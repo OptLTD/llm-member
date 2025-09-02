@@ -13,50 +13,49 @@ import (
 
 	"github.com/go-pay/gopay"
 	"github.com/go-pay/gopay/wechat/v3"
-	"github.com/go-pay/xlog"
 )
 
 // WechatPayment 微信支付实现
 type WechatPayment struct {
 	client *wechat.ClientV3
-	config *config.WechatProvider
+	config *config.Wechat
 }
 
 // NewWechatPayment 创建微信支付实例
-func NewWechatPayment() (*WechatPayment, error) {
-	provider := config.GetWechatProvider()
+func NewWechatPayment() *WechatPayment {
+	return &WechatPayment{}
+}
+
+// ensureClientReady 确保客户端已准备就绪
+func (w *WechatPayment) ensureClientReady() error {
+	if w.client != nil && w.config != nil {
+		return nil
+	}
+
+	// 获取配置
+	provider := config.GetWechatConfig()
 	if provider == nil {
-		return nil, consts.ErrPaymentProviderNotConfigured
+		return consts.ErrPaymentProviderNotConfigured
 	}
 
-	// 验证必要的配置参数
-	if provider.MchID == "" || provider.SerialNo == "" || provider.APIv3Key == "" || provider.PrivateKey == "" {
-		return nil, consts.ErrPaymentConfigIncomplete
-	}
-
-	// 创建微信支付v3客户端
+	// 创建微信支付客户端
 	client, err := wechat.NewClientV3(provider.MchID, provider.SerialNo, provider.APIv3Key, provider.PrivateKey)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", consts.ErrPaymentClientCreationFailed, err)
+		return fmt.Errorf("%w: %v", consts.ErrPaymentClientCreationFailed, err)
 	}
 
-	// 启用自动验签（使用平台证书自动获取）
-	err = client.AutoVerifySign()
-	if err != nil {
-		xlog.Warn("Failed to enable auto verify sign:", err)
-	}
-
-	// 开启调试模式（可选）
-	client.DebugSwitch = gopay.DebugOff
-
-	return &WechatPayment{
-		client: client,
-		config: provider,
-	}, nil
+	w.client = client
+	w.config = provider
+	return nil
 }
 
 // Create 创建微信支付订单
 func (w *WechatPayment) Create(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := w.ensureClientReady(); err != nil {
+		return err
+	}
+
 	// 根据套餐类型设置价格（微信支付使用分为单位）
 	var amount int
 	switch order.PayPlan {
@@ -122,6 +121,11 @@ func (w *WechatPayment) Create(order *model.OrderModel) error {
 
 // Query 查询微信支付状态
 func (w *WechatPayment) Query(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := w.ensureClientReady(); err != nil {
+		return err
+	}
+
 	// 调用微信支付v3查询订单接口
 	wxRsp, err := w.client.V3TransactionQueryOrder(
 		context.Background(), wechat.OutTradeNo, order.OrderID,
@@ -169,6 +173,11 @@ func (w *WechatPayment) Query(order *model.OrderModel) error {
 
 // Close 关闭微信支付订单
 func (w *WechatPayment) Close(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := w.ensureClientReady(); err != nil {
+		return err
+	}
+
 	// 创建关闭请求参数
 	bodyMap := make(gopay.BodyMap)
 	bodyMap.Set("mchid", w.config.MchID)
@@ -193,6 +202,11 @@ func (w *WechatPayment) Close(order *model.OrderModel) error {
 
 // Refund 微信支付退款
 func (w *WechatPayment) Refund(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := w.ensureClientReady(); err != nil {
+		return err
+	}
+
 	// 创建退款请求参数
 	bodyMap := make(gopay.BodyMap)
 	bodyMap.Set("out_trade_no", order.OrderID).

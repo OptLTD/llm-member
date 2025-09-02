@@ -18,30 +18,44 @@ import (
 // PaypalPayment PayPal支付实现
 type PaypalPayment struct {
 	client *paypal.Client
-	config *config.PaymentProvider
+	config *config.PayPal
 }
 
 // NewPaypalPayment 创建PayPal支付实例
-func NewPaypalPayment() (*PaypalPayment, error) {
-	provider := config.GetPaymentProvider("paypal")
+func NewPaypalPayment() *PaypalPayment {
+	return &PaypalPayment{}
+}
+
+// ensureClientReady 确保客户端已准备就绪
+func (p *PaypalPayment) ensureClientReady() error {
+	if p.client != nil && p.config != nil {
+		return nil
+	}
+
+	// 获取配置
+	provider := config.GetPayPalConfig()
 	if provider == nil {
-		return nil, consts.ErrPaymentProviderNotConfigured
+		return consts.ErrPaymentProviderNotConfigured
 	}
 
 	// 创建PayPal客户端
 	client, err := paypal.NewClient(provider.AppID, provider.Token, false) // false表示沙箱环境
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", consts.ErrPaymentClientCreationFailed, err)
+		return fmt.Errorf("%w: %v", consts.ErrPaymentClientCreationFailed, err)
 	}
 
-	return &PaypalPayment{
-		client: client,
-		config: provider,
-	}, nil
+	p.client = client
+	p.config = provider
+	return nil
 }
 
 // Create 创建PayPal支付订单
 func (p *PaypalPayment) Create(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := p.ensureClientReady(); err != nil {
+		return err
+	}
+
 	// 根据套餐类型设置价格
 	var amount float64
 	switch order.PayPlan {
@@ -60,17 +74,16 @@ func (p *PaypalPayment) Create(order *model.OrderModel) error {
 	// 创建支付请求参数
 	bodyMap := make(gopay.BodyMap)
 	bodyMap.Set("intent", "CAPTURE")
-	bodyMap.Set("purchase_units", []map[string]interface{}{
+	bodyMap.Set("purchase_units", []object{
 		{
 			"reference_id": order.OrderID,
-			"amount": map[string]interface{}{
-				"currency_code": "USD",
-				"value":         fmt.Sprintf("%.2f", amount),
+			"amount": object{
+				"currency_code": "USD", "value": fmt.Sprintf("%.2f", amount),
 			},
 			"description": fmt.Sprintf("%s Plan", order.PayPlan),
 		},
 	})
-	bodyMap.Set("application_context", map[string]interface{}{
+	bodyMap.Set("application_context", object{
 		"return_url": "http://localhost:8080/payment/return",
 		"cancel_url": "http://localhost:8080/payment/cancel",
 	})
@@ -104,6 +117,11 @@ func (p *PaypalPayment) Create(order *model.OrderModel) error {
 
 // Query 查询PayPal支付状态
 func (p *PaypalPayment) Query(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := p.ensureClientReady(); err != nil {
+		return err
+	}
+
 	// PayPal通常通过webhook或redirect处理状态更新
 	// 这里提供基本的查询实现
 	if order.Status == model.PaymentPending {
@@ -115,6 +133,11 @@ func (p *PaypalPayment) Query(order *model.OrderModel) error {
 
 // Close 关闭PayPal支付订单
 func (p *PaypalPayment) Close(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := p.ensureClientReady(); err != nil {
+		return err
+	}
+
 	// PayPal订单关闭逻辑
 	order.Status = model.PaymentCanceled
 	return nil
@@ -122,6 +145,11 @@ func (p *PaypalPayment) Close(order *model.OrderModel) error {
 
 // Refund PayPal退款
 func (p *PaypalPayment) Refund(order *model.OrderModel) error {
+	// 检查配置和初始化客户端
+	if err := p.ensureClientReady(); err != nil {
+		return err
+	}
+
 	// PayPal退款需要通过PayPal后台或API实现
 	// 这里提供基本的状态更新
 	log.Printf("[paypal][%s] processing refund, amount: %.2f USD", order.OrderID, order.Amount)

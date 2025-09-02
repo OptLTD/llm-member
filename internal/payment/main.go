@@ -1,11 +1,13 @@
 package payment
 
 import (
-	"fmt"
 	"llm-member/internal/consts"
 	"llm-member/internal/model"
 	"net/http"
 )
+
+// 定义一个通用的map类型别名
+type object = map[string]any
 
 // Event 支付回调事件
 type Event struct {
@@ -26,7 +28,32 @@ type IPayment interface {
 	Webhook(req *http.Request) (*Event, error)
 }
 
-func NewPayment(method model.PaymentMethod) (IPayment, error) {
+// UnsupportedPayment 不支持的支付方式实现
+type UnsupportedPayment struct {
+	method model.PaymentMethod
+}
+
+func (u *UnsupportedPayment) Create(order *model.OrderModel) error {
+	return consts.ErrPaymentMethodNotSupported
+}
+
+func (u *UnsupportedPayment) Close(order *model.OrderModel) error {
+	return consts.ErrPaymentMethodNotSupported
+}
+
+func (u *UnsupportedPayment) Query(order *model.OrderModel) error {
+	return consts.ErrPaymentMethodNotSupported
+}
+
+func (u *UnsupportedPayment) Refund(order *model.OrderModel) error {
+	return consts.ErrPaymentMethodNotSupported
+}
+
+func (u *UnsupportedPayment) Webhook(req *http.Request) (*Event, error) {
+	return nil, consts.ErrPaymentMethodNotSupported
+}
+
+func NewPayment(method model.PaymentMethod) IPayment {
 	switch method {
 	case "paypal":
 		return NewPaypalPayment()
@@ -39,8 +66,9 @@ func NewPayment(method model.PaymentMethod) (IPayment, error) {
 	case "stripe":
 		return NewStripePayment()
 	case "mock":
-		return &MockPayment{}, nil
+		return &MockPayment{}
 	default:
-		return nil, fmt.Errorf("%w: %s", consts.ErrPaymentMethodNotSupported, method)
+		// 返回一个错误实现，在调用接口时返回不支持的支付方式错误
+		return &UnsupportedPayment{method: method}
 	}
 }

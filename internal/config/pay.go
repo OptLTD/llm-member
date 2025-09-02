@@ -1,15 +1,6 @@
 package config
 
-// PaymentProvider 支付提供商配置
-type PaymentProvider struct {
-	Name  string // 支付提供商名称
-	AppID string // 应用ID
-	Token string // 密钥/Token
-
-	WHSEC string // Webhook签名密钥
-}
-
-type WechatProvider struct {
+type Wechat struct {
 	AppID      string // 应用ID
 	Token      string // 密钥/Token
 	MchID      string // 商户ID
@@ -19,8 +10,11 @@ type WechatProvider struct {
 	NotifyURL  string // 回调地址
 }
 
-func GetWechatProvider() *WechatProvider {
-	return &WechatProvider{
+func GetWechatConfig() *Wechat {
+	if getEnv("WECHAT_TOKEN", "") == "" {
+		return nil
+	}
+	return &Wechat{
 		AppID:      getEnv("WECHAT_APP_ID", ""),
 		Token:      getEnv("WECHAT_TOKEN", ""),
 		MchID:      getEnv("WECHAT_MCH_ID", ""),
@@ -31,74 +25,101 @@ func GetWechatProvider() *WechatProvider {
 	}
 }
 
-// GetPaymentProviders 返回已配置的支付提供商列表
-func GetPaymentProviders() []PaymentProvider {
-	var providers []PaymentProvider
+type Creem struct {
+	ApiKey string
 
-	// 支付宝
-	if mode := getEnv("APP_MODE", ""); mode != "release" {
-		providers = append(providers, PaymentProvider{
-			Name: "mock", AppID: mode,
-		})
-	}
+	WhSecret string
 
-	// 支付宝
-	if appID := getEnv("ALIPAY_APP_ID", ""); appID != "" {
-		providers = append(providers, PaymentProvider{
-			Name: "alipay", AppID: appID,
-			Token: getEnv("ALIPAY_TOKEN", ""),
-		})
-	}
-
-	// 微信支付
-	if appID := getEnv("WECHAT_APP_ID", ""); appID != "" {
-		providers = append(providers, PaymentProvider{
-			Name: "wechat", AppID: appID,
-			Token: getEnv("WECHAT_TOKEN", ""),
-		})
-	}
-
-	// 银联支付
-	if appID := getEnv("UNION_APP_ID", ""); appID != "" {
-		providers = append(providers, PaymentProvider{
-			Name: "union", AppID: appID,
-			Token: getEnv("UNION_TOKEN", ""),
-		})
-	}
-
-	// Stripe
-	if appID := getEnv("STRIPE_APP_ID", ""); appID != "" {
-		providers = append(providers, PaymentProvider{
-			Name: "stripe", AppID: appID,
-			Token: getEnv("STRIPE_TOKEN", ""),
-		})
-	}
-
-	// Creem
-	if appID := getEnv("CREEM_APP_ID", ""); appID != "" {
-		providers = append(providers, PaymentProvider{
-			Name: "creem", AppID: appID,
-			Token: getEnv("CREEM_TOKEN", ""),
-			WHSEC: getEnv("CREEM_WHSEC", ""),
-		})
-	}
-
-	return providers
+	PlanBasicId string
+	PlanExtraId string
+	PlanUltraId string
+	PlanSuperId string
 }
 
-// GetPaymentProvider 根据名称获取特定的支付提供商配置
-func GetPaymentProvider(name string) *PaymentProvider {
-	providers := GetPaymentProviders()
-	for _, provider := range providers {
-		if provider.Name == name {
-			return &provider
-		}
+func GetCreemConfig() *Creem {
+	if getEnv("CREEM_API_KEY", "") == "" {
+		return nil
 	}
-	return nil
+	return &Creem{
+		ApiKey:   getEnv("CREEM_API_KEY", ""),
+		WhSecret: getEnv("CREEM_WH_SECRET", ""),
+
+		PlanBasicId: getEnv("PLAN_BASIC_ID", ""),
+		PlanExtraId: getEnv("PLAN_EXTRA_ID", ""),
+		PlanUltraId: getEnv("PLAN_ULTRA_ID", ""),
+		PlanSuperId: getEnv("PLAN_SUPER_ID", ""),
+	}
 }
 
-// HasPaymentProvider 检查是否配置了指定的支付提供商
-func HasPaymentProvider(name string) bool {
-	provider := GetPaymentProvider(name)
-	return provider != nil
+type Stripe struct {
+	PublicKey string // 公钥
+	SecretKey string // 私钥
+	WhSecret  string // Webhook签名密钥
+
+	PlanBasicId string
+	PlanExtraId string
+	PlanUltraId string
+	PlanSuperId string
+}
+
+func GetStripeConfig() *Stripe {
+	if getEnv("STRIPE_SECRET_KEY", "") == "" {
+		return nil
+	}
+	return &Stripe{
+		PublicKey: getEnv("STRIPE_PUBLIC_KEY", ""),
+		SecretKey: getEnv("STRIPE_SECRET_KEY", ""),
+		WhSecret:  getEnv("STRIPE_WH_SECRET", ""),
+
+		PlanBasicId: getEnv("PLAN_BASIC_ID", ""),
+		PlanExtraId: getEnv("PLAN_EXTRA_ID", ""),
+		PlanUltraId: getEnv("PLAN_ULTRA_ID", ""),
+		PlanSuperId: getEnv("PLAN_SUPER_ID", ""),
+	}
+}
+
+type Alipay struct {
+	AppID string // 应用ID
+	Token string // 密钥/Token
+}
+
+func GetAlipayConfig() *Alipay {
+	if getEnv("ALIPAY_APP_ID", "") == "" {
+		return nil
+	}
+	return &Alipay{
+		AppID: getEnv("ALIPAY_APP_ID", ""),
+		Token: getEnv("ALIPAY_TOKEN", ""),
+	}
+}
+
+type PayPal struct {
+	AppID string // 应用ID
+	Token string // 密钥/Token
+}
+
+func GetPayPalConfig() *PayPal {
+	if getEnv("PAYPAL_APP_ID", "") == "" {
+		return nil
+	}
+	return &PayPal{
+		AppID: getEnv("PAYPAL_APP_ID", ""),
+		Token: getEnv("PAYPAL_TOKEN", ""),
+	}
+}
+
+// HasPayment 检查是否配置了指定的支付配置
+func HasPayment(name string) bool {
+	switch name {
+	case "alipay":
+		return GetAlipayConfig() != nil
+	case "wechat":
+		return GetWechatConfig() != nil
+	case "stripe":
+		return GetStripeConfig() != nil
+	case "creem":
+		return GetCreemConfig() != nil
+	default:
+		return false
+	}
 }

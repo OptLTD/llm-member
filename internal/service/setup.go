@@ -44,6 +44,9 @@ func HandleInit() error {
 	if err := s.createDefaultAdmin(); err != nil {
 		return fmt.Errorf("%w: %v", consts.ErrCreateDefaultAdminFailed, err)
 	}
+	if err := config.InitRedis(s.cfg.Redis); err != nil {
+		log.Println("Failed to initialize redis:", err)
+	}
 	return nil
 }
 
@@ -361,10 +364,13 @@ func (s *SetupService) GetDefaultPlan() []model.PlanInfo {
 
 // initDefaultConfigs 初始化默认配置
 func (s *SetupService) initDefaultConfigs() error {
+	var creemConfig = config.GetCreemConfig()
+	var stripeConfig = config.GetStripeConfig()
 	for _, plan := range s.GetDefaultPlan() {
 		var config model.ConfigModel
 		var key = "plan." + plan.Plan
-		err := s.db.Where("`key` = ?", key).First(&config).Error
+		var query = s.db.Where("`key` = ?", key)
+		var err = query.First(&config).Error
 		if err != gorm.ErrRecordNotFound {
 			continue
 		}
@@ -376,9 +382,41 @@ func (s *SetupService) initDefaultConfigs() error {
 		} else {
 			config.Data = string(data)
 		}
+		s.setPlanByCreem(&plan, creemConfig)
+		s.setPlanByStripe(&plan, stripeConfig)
 		if err := s.db.Create(&config).Error; err != nil {
 			return fmt.Errorf("failed to create config %s: %v", config.Key, err)
 		}
 	}
 	return nil
+}
+func (s *SetupService) setPlanByCreem(plan *model.PlanInfo, cfg *config.Creem) {
+	if cfg == nil {
+		return
+	}
+	switch plan.Plan {
+	case "basic":
+		plan.Enabled = cfg.PlanBasicId != ""
+	case "extra":
+		plan.Enabled = cfg.PlanExtraId != ""
+	case "ultra":
+		plan.Enabled = cfg.PlanUltraId != ""
+	case "super":
+		plan.Enabled = cfg.PlanSuperId != ""
+	}
+}
+func (s *SetupService) setPlanByStripe(plan *model.PlanInfo, cfg *config.Stripe) {
+	if cfg == nil {
+		return
+	}
+	switch plan.Plan {
+	case "basic":
+		plan.Enabled = cfg.PlanBasicId != ""
+	case "extra":
+		plan.Enabled = cfg.PlanExtraId != ""
+	case "ultra":
+		plan.Enabled = cfg.PlanUltraId != ""
+	case "super":
+		plan.Enabled = cfg.PlanSuperId != ""
+	}
 }

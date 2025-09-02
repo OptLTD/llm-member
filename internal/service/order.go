@@ -21,19 +21,6 @@ type OrderService struct {
 	db *gorm.DB
 }
 
-// handlePaymentError 处理支付相关错误，记录详细信息并返回用户友好错误
-func (s *OrderService) handlePaymentError(provider consts.PaymentProvider, errorType consts.PaymentErrorType, err error, context string) error {
-	if err == nil {
-		return nil
-	}
-
-	// 记录详细错误信息供管理员查看
-	consts.LogDetailedError(provider, errorType, err, context)
-
-	// 返回用户友好的错误信息
-	return consts.GetUserFriendlyError(err)
-}
-
 // getProviderFromMethod 根据支付方式获取提供商类型
 func (s *OrderService) getProviderFromMethod(method model.PaymentMethod) consts.PaymentProvider {
 	switch method {
@@ -61,7 +48,7 @@ func NewOrderService() *OrderService {
 
 func (s *OrderService) CreateOrder(req *model.OrderRequest, plan *model.PlanInfo) (*model.OrderModel, error) {
 	// 检查支付方式是否可用
-	if !config.HasPaymentProvider(string(req.Method)) {
+	if !config.HasPayment(string(req.Method)) {
 		return nil, fmt.Errorf("%w %s", consts.ErrPaymentMethodNotEnabled, req.Method)
 	}
 	// 生成订单ID, 创建订单记录
@@ -83,14 +70,12 @@ func (s *OrderService) CreateOrder(req *model.OrderRequest, plan *model.PlanInfo
 	}
 	// 支付订单
 	providerType := s.getProviderFromMethod(req.Method)
-	provider, err := payment.NewPayment(req.Method)
-	if err != nil {
-		return nil, s.handlePaymentError(providerType, consts.ErrorTypeConfig, err, "create payment provider instance")
+	provider := payment.NewPayment(req.Method)
+	if err := provider.Create(order); err != nil {
+		consts.LogDetailedError(providerType, consts.ErrorTypeCreation, err, "create payment order")
+		return nil, consts.GetFriendlyError(err)
 	}
-	if err = provider.Create(order); err != nil {
-		return nil, s.handlePaymentError(providerType, consts.ErrorTypeCreation, err, "create payment order")
-	}
-	if err = s.db.Save(order).Error; err != nil {
+	if err := s.db.Save(order).Error; err != nil {
 		return nil, fmt.Errorf("%w: %v", consts.ErrOrderSaveFailed, err)
 	}
 	return order, nil
@@ -109,17 +94,17 @@ func (s *OrderService) FindOrder(orderID string) (*model.OrderModel, error) {
 func (s *OrderService) VerifyCallback(name string, req *http.Request) (*model.OrderModel, error) {
 	method := model.PaymentMethod(name)
 	providerType := s.getProviderFromMethod(method)
-	provider, err := payment.NewPayment(method)
-	if err != nil {
-		return nil, s.handlePaymentError(providerType, consts.ErrorTypeConfig, err, "create payment provider instance for webhook")
-	}
+	provider := payment.NewPayment(method)
 
 	var orderId string
 	// 使用支付提供商的Webhook方法验证回调
 	if event, err := provider.Webhook(req); err != nil {
-		return nil, s.handlePaymentError(providerType, consts.ErrorTypeWebhook, err, "verify payment webhook")
+		consts.LogDetailedError(
+			providerType, consts.ErrorTypeConfig, err,
+			"verify payment webhook",
+		)
+		return nil, consts.GetFriendlyError(err)
 	} else if event == nil || event.OrderID == "" {
-		// 根据事件中的OrderID查找订单
 		return nil, consts.ErrPaymentWebhookMissingParams
 	} else {
 		orderId = event.OrderID
@@ -142,12 +127,13 @@ func (s *OrderService) QueryPayment(order *model.OrderModel) error {
 	}
 
 	providerType := s.getProviderFromMethod(order.Method)
-	provider, err := payment.NewPayment(order.Method)
-	if err != nil {
-		return s.handlePaymentError(providerType, consts.ErrorTypeConfig, err, "create payment provider instance for query")
-	}
+	provider := payment.NewPayment(order.Method)
 	if err := provider.Query(order); err != nil {
-		return s.handlePaymentError(providerType, consts.ErrorTypeQuery, err, "query payment status")
+		consts.LogDetailedError(
+			providerType, consts.ErrorTypeQuery, err,
+			"query payment status",
+		)
+		return consts.GetFriendlyError(err)
 	}
 	return nil
 }
