@@ -1,12 +1,11 @@
 package service
 
 import (
-	"bufio"
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
+	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -15,26 +14,39 @@ import (
 	"llm-member/internal/consts"
 	"llm-member/internal/model"
 
-	"github.com/google/uuid"
 	"github.com/sashabaranov/go-openai"
 )
 
-// APIConfig 通用 API 配置
+// APIConfig 通用 API 配置（统一 OpenAI-compatible）
 type APIConfig struct {
-	BaseURL string
-	APIKey  string
-
+	BaseURL  string
+	APIKey   string
 	Provider string
 	ReqModel string
-
-	Compatible bool
 }
 
-type RelayService struct {
-}
+type RelayService struct{}
 
 func NewRelayService() *RelayService {
 	return &RelayService{}
+}
+
+// 共享 HTTP 客户端，复用连接
+var sharedHTTPClient = &http.Client{
+	Timeout: 0, // 由 context 控制超时
+	Transport: &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   20,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		ForceAttemptHTTP2:     true,
+	},
 }
 
 func (s *RelayService) ChatCompletions(ctx context.Context, req *model.ChatRequest) (*model.ChatResponse, error) {
@@ -45,11 +57,7 @@ func (s *RelayService) ChatCompletions(ctx context.Context, req *model.ChatReque
 	if req.Model == "" || req.Model == "auto-match" {
 		req.Model = apiConfig.ReqModel
 	}
-	if apiConfig.Compatible {
-		return s.callWithClient(ctx, req, apiConfig)
-	} else {
-		return s.callWithHTTP(ctx, req, apiConfig)
-	}
+	return s.callWithClient(ctx, req, apiConfig)
 }
 
 // ChatCompletionsStream 流式聊天完成
@@ -70,42 +78,51 @@ func (s *RelayService) ChatCompletionsStream(ctx context.Context, req *model.Cha
 		if req.Model == "" || req.Model == "auto-match" {
 			req.Model = apiConfig.ReqModel
 		}
-		if apiConfig.Compatible {
-			s.streamWithClient(ctx, req, apiConfig, respChan, errorChan)
-		} else {
-			s.streamWithHTTP(ctx, req, apiConfig, respChan, errorChan)
-		}
+		s.streamWithClient(ctx, req, apiConfig, respChan, errorChan)
 	}()
 
 	return respChan, errorChan
 }
 
-func (s *RelayService) GetAPIConfig(model string) (*APIConfig, error) {
-	apiConfig := &APIConfig{Compatible: true}
-	apiConfig.Provider = s.GetProvider(model)
-	if model == "" || model == "auto-match" {
+func isNativeNonCompatibleURL(provider, baseURL string) bool {
+	u := strings.ToLower(baseURL)
+	switch provider {
+	case "claude":
+		return strings.Contains(u, "api.anthropic.com")
+	case "gemini":
+		return strings.Contains(u, "generativelanguage.googleapis.com")
+	default:
+		return false
+	}
+}
+
+func (s *RelayService) GetAPIConfig(modelName string) (*APIConfig, error) {
+	apiConfig := &APIConfig{}
+	apiConfig.Provider = s.GetProvider(modelName)
+	if modelName == "" || modelName == "auto-match" {
 		if models := s.GetModels(); len(models) > 0 {
-			provider := models[0].Provider
-			apiConfig.Provider = provider
+			apiConfig.Provider = models[0].Provider
 			apiConfig.ReqModel = models[0].ID
 		}
 	}
 	if apiConfig.Provider == "unknown" {
-		return nil, fmt.Errorf("%w: %s", consts.ErrUnsupportedModel, model)
+		return nil, fmt.Errorf("%w: %s", consts.ErrUnsupportedModel, modelName)
 	}
 
-	if provider := config.GetProvider(apiConfig.Provider); provider == nil {
-		fmt.Printf("[LLM] Provider %s not found in config\n", provider)
-		return nil, fmt.Errorf("%w: %s", consts.ErrProviderNotConfigured, provider)
-	} else {
-		apiConfig.APIKey = provider.APIKey
-		apiConfig.BaseURL = provider.BaseURL
+	providerName := apiConfig.Provider
+	provider := config.GetProvider(providerName)
+	if provider == nil {
+		log.Printf("[LLM] Provider %s not found in config", providerName)
+		return nil, fmt.Errorf("%w: %s", consts.ErrProviderNotConfigured, providerName)
 	}
+	apiConfig.APIKey = provider.APIKey
+	apiConfig.BaseURL = provider.BaseURL
 
-	// 只有少数提供商需要特殊处理
-	switch apiConfig.Provider {
-	case "claude", "gemini":
-		apiConfig.Compatible = false
+	if isNativeNonCompatibleURL(providerName, provider.BaseURL) {
+		return nil, fmt.Errorf(
+			"%w: provider %s BaseURL %q is not OpenAI-compatible; use a compatible gateway (e.g. OpenRouter) or set an OpenAI-compatible BaseURL",
+			consts.ErrProviderNotConfigured, providerName, provider.BaseURL,
+		)
 	}
 
 	return apiConfig, nil
@@ -114,7 +131,6 @@ func (s *RelayService) GetAPIConfig(model string) (*APIConfig, error) {
 func (s *RelayService) GetModels() []model.LLModelInfo {
 	var modelList []model.LLModelInfo
 
-	// OpenAI 模型
 	if config.HasProvider("openai") {
 		modelList = append(modelList, []model.LLModelInfo{
 			{ID: "gpt-4", Object: "model", Provider: "openai", Name: "GPT-4"},
@@ -125,7 +141,6 @@ func (s *RelayService) GetModels() []model.LLModelInfo {
 		}...)
 	}
 
-	// Claude 模型
 	if config.HasProvider("claude") {
 		modelList = append(modelList, []model.LLModelInfo{
 			{ID: "claude-3-5-sonnet-20241022", Object: "model", Provider: "claude", Name: "Claude 3.5 Sonnet"},
@@ -134,7 +149,6 @@ func (s *RelayService) GetModels() []model.LLModelInfo {
 		}...)
 	}
 
-	// 通义千问模型
 	if config.HasProvider("qwen") {
 		modelList = append(modelList, []model.LLModelInfo{
 			{ID: "qwen-turbo", Object: "model", Provider: "qwen", Name: "通义千问 Turbo"},
@@ -144,14 +158,12 @@ func (s *RelayService) GetModels() []model.LLModelInfo {
 		}...)
 	}
 
-	// 豆包模型
 	if config.HasProvider("doubao") {
 		modelList = append(modelList, []model.LLModelInfo{
 			{ID: "doubao-seed-1-6-250615", Object: "model", Provider: "doubao", Name: "豆包 Seed 1.6"},
 		}...)
 	}
 
-	// 智谱清言模型
 	if config.HasProvider("bigmodel") {
 		modelList = append(modelList, []model.LLModelInfo{
 			{ID: "glm-4", Object: "model", Provider: "bigmodel", Name: "GLM-4"},
@@ -161,7 +173,6 @@ func (s *RelayService) GetModels() []model.LLModelInfo {
 		}...)
 	}
 
-	// Grok 模型
 	if config.HasProvider("grok") {
 		modelList = append(modelList, []model.LLModelInfo{
 			{ID: "grok-beta", Object: "model", Provider: "grok", Name: "Grok Beta"},
@@ -169,7 +180,6 @@ func (s *RelayService) GetModels() []model.LLModelInfo {
 		}...)
 	}
 
-	// Gemini 模型
 	if config.HasProvider("gemini") {
 		modelList = append(modelList, []model.LLModelInfo{
 			{ID: "gemini-1.5-pro", Object: "model", Provider: "gemini", Name: "Gemini 1.5 Pro"},
@@ -178,7 +188,6 @@ func (s *RelayService) GetModels() []model.LLModelInfo {
 		}...)
 	}
 
-	// OpenRouter 模型
 	if config.HasProvider("openrouter") {
 		modelList = append(modelList, []model.LLModelInfo{
 			{ID: "openai/gpt-4o", Object: "model", Provider: "openrouter", Name: "GPT-4o (OpenRouter)"},
@@ -187,7 +196,6 @@ func (s *RelayService) GetModels() []model.LLModelInfo {
 		}...)
 	}
 
-	// SiliconFlow 模型
 	if config.HasProvider("siliconflow") {
 		modelList = append(modelList, []model.LLModelInfo{
 			{ID: "qwen/qwen2.5-72b-instruct", Object: "model", Provider: "siliconflow", Name: "Qwen2.5 72B"},
@@ -195,7 +203,6 @@ func (s *RelayService) GetModels() []model.LLModelInfo {
 		}...)
 	}
 
-	// DeepSeek 模型
 	if config.HasProvider("deepseek") {
 		modelList = append(modelList, []model.LLModelInfo{
 			{ID: "deepseek-chat", Object: "model", Provider: "deepseek", Name: "DeepSeek Chat"},
@@ -204,7 +211,6 @@ func (s *RelayService) GetModels() []model.LLModelInfo {
 		}...)
 	}
 
-	// OpenAI-Like 模型
 	if config.HasProvider("openai-like") {
 		modelList = append(modelList, []model.LLModelInfo{
 			{ID: "custom-model", Object: "model", Provider: "openai-like", Name: "Custom Model"},
@@ -214,74 +220,70 @@ func (s *RelayService) GetModels() []model.LLModelInfo {
 	return modelList
 }
 
-func (s *RelayService) GetProvider(model string) string {
-	// OpenAI 模型
-	if strings.HasPrefix(model, "gpt-") {
+func (s *RelayService) GetProvider(modelName string) string {
+	// 含 provider 前缀的斜杠模型：先按已知前缀区分
+	if strings.Contains(modelName, "/") {
+		lower := strings.ToLower(modelName)
+		switch {
+		case strings.HasPrefix(lower, "qwen/"),
+			strings.HasPrefix(lower, "meta-llama/"),
+			strings.HasPrefix(lower, "deepseek/"):
+			if config.HasProvider("siliconflow") {
+				return "siliconflow"
+			}
+		case strings.HasPrefix(lower, "openai/"),
+			strings.HasPrefix(lower, "anthropic/"),
+			strings.HasPrefix(lower, "google/"):
+			if config.HasProvider("openrouter") {
+				return "openrouter"
+			}
+		}
+		if config.HasProvider("openrouter") {
+			return "openrouter"
+		}
+		if config.HasProvider("siliconflow") {
+			return "siliconflow"
+		}
+	}
+
+	if strings.HasPrefix(modelName, "gpt-") {
 		return "openai"
 	}
-
-	// Claude 模型
-	if strings.HasPrefix(model, "claude-") {
+	if strings.HasPrefix(modelName, "claude-") {
 		return "claude"
 	}
-
-	// 通义千问模型
-	if strings.HasPrefix(model, "qwen-") || strings.HasPrefix(model, "qwen2") {
+	if strings.HasPrefix(modelName, "qwen-") || strings.HasPrefix(modelName, "qwen2") {
 		return "qwen"
 	}
-
-	// 豆包模型
-	if strings.HasPrefix(model, "doubao-") {
+	if strings.HasPrefix(modelName, "doubao-") {
 		return "doubao"
 	}
-
-	// 智谱清言模型
-	if strings.HasPrefix(model, "glm-") {
+	if strings.HasPrefix(modelName, "glm-") {
 		return "bigmodel"
 	}
-
-	// DeepSeek 模型
-	if strings.HasPrefix(model, "deepseek-") {
+	if strings.HasPrefix(modelName, "deepseek-") {
 		return "deepseek"
 	}
-
-	// Grok 模型
-	if strings.HasPrefix(model, "grok-") {
+	if strings.HasPrefix(modelName, "grok-") {
 		return "grok"
 	}
-
-	// Gemini 模型
-	if strings.HasPrefix(model, "gemini-") {
+	if strings.HasPrefix(modelName, "gemini-") {
 		return "gemini"
 	}
-
-	// OpenRouter 模型（包含斜杠的模型名）
-	if strings.Contains(model, "/") {
-		return "openrouter"
-	}
-
-	// SiliconFlow 模型
-	if strings.Contains(model, "qwen/") {
-		return "siliconflow"
-	}
-
-	// OpenAI-Like 模型
-	if model == "custom-model" {
+	if modelName == "custom-model" {
 		return "openai-like"
 	}
-
 	return "unknown"
 }
 
-// callWithClient 使用 OpenAI 客户端调用
 func (s *RelayService) callWithClient(ctx context.Context, req *model.ChatRequest, apiConfig *APIConfig) (*model.ChatResponse, error) {
-	fmt.Printf("[LLM] curr model: %s, BaseURL: %s\n", req.Model, apiConfig.BaseURL)
+	log.Printf("[LLM] model=%s base=%s", req.Model, apiConfig.BaseURL)
 
-	config := openai.DefaultConfig(apiConfig.APIKey)
-	config.BaseURL = apiConfig.BaseURL
-	client := openai.NewClientWithConfig(config)
+	cfg := openai.DefaultConfig(apiConfig.APIKey)
+	cfg.BaseURL = apiConfig.BaseURL
+	cfg.HTTPClient = sharedHTTPClient
+	client := openai.NewClientWithConfig(cfg)
 
-	// 转换消息格式
 	var messages []openai.ChatCompletionMessage
 	for _, msg := range req.Messages {
 		messages = append(messages, openai.ChatCompletionMessage{
@@ -289,11 +291,10 @@ func (s *RelayService) callWithClient(ctx context.Context, req *model.ChatReques
 		})
 	}
 
-	// 构建请求
 	chatReq := openai.ChatCompletionRequest{
-		Model: req.Model, Messages: messages,
+		Model:    req.Model,
+		Messages: messages,
 	}
-
 	if req.Temperature != nil {
 		chatReq.Temperature = *req.Temperature
 	}
@@ -304,14 +305,12 @@ func (s *RelayService) callWithClient(ctx context.Context, req *model.ChatReques
 		chatReq.TopP = *req.TopP
 	}
 
-	// 调用 API
 	resp, err := client.CreateChatCompletion(ctx, chatReq)
 	if err != nil {
-		fmt.Printf("[LLM] OpenAI client error for model %s: %v\n", req.Model, err)
+		log.Printf("[LLM] client error model=%s: %v", req.Model, err)
 		return nil, err
 	}
 
-	// 转换响应格式
 	var choices []model.ChatChoice
 	for i, choice := range resp.Choices {
 		choices = append(choices, model.ChatChoice{
@@ -338,66 +337,14 @@ func (s *RelayService) callWithClient(ctx context.Context, req *model.ChatReques
 	}, nil
 }
 
-// callWithHTTP 使用 HTTP 调用
-func (s *RelayService) callWithHTTP(ctx context.Context, req *model.ChatRequest, apiConfig *APIConfig) (*model.ChatResponse, error) {
-	fmt.Printf("[LLM] Using HTTP client for model: %s, BaseURL: %s\n", req.Model, apiConfig.BaseURL)
-
-	// 构建请求体
-	reqBody, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-
-	// 创建 HTTP 请求
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", apiConfig.BaseURL+"/chat/completions", bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, err
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+apiConfig.APIKey)
-
-	// 发送请求
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("%w: %s", consts.ErrAPIError, string(body))
-	}
-
-	// 解析响应
-	var chatResp model.ChatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
-		return nil, err
-	}
-
-	// 如果响应中没有 ID，生成一个
-	if chatResp.ID == "" {
-		chatResp.ID = "chatcmpl-" + uuid.New().String()
-	}
-
-	// 设置时间戳
-	if chatResp.Created == 0 {
-		chatResp.Created = time.Now().Unix()
-	}
-
-	return &chatResp, nil
-}
-
-// streamWithClient 使用 OpenAI 客户端进行流式调用
 func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequest, apiConfig *APIConfig, responseChan chan<- *model.ChatStreamResponse, errorChan chan<- error) {
-	fmt.Printf("[LLM] curr model: %s, BaseURL: %s\n", req.Model, apiConfig.BaseURL)
+	log.Printf("[LLM] stream model=%s base=%s", req.Model, apiConfig.BaseURL)
 
-	config := openai.DefaultConfig(apiConfig.APIKey)
-	config.BaseURL = apiConfig.BaseURL
-	client := openai.NewClientWithConfig(config)
+	cfg := openai.DefaultConfig(apiConfig.APIKey)
+	cfg.BaseURL = apiConfig.BaseURL
+	cfg.HTTPClient = sharedHTTPClient
+	client := openai.NewClientWithConfig(cfg)
 
-	// 转换消息格式
 	var messages []openai.ChatCompletionMessage
 	for _, msg := range req.Messages {
 		messages = append(messages, openai.ChatCompletionMessage{
@@ -405,13 +352,14 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 		})
 	}
 
-	// 构建请求
 	chatReq := openai.ChatCompletionRequest{
 		Model:    req.Model,
 		Messages: messages,
 		Stream:   true,
+		StreamOptions: &openai.StreamOptions{
+			IncludeUsage: true,
+		},
 	}
-
 	if req.Temperature != nil {
 		chatReq.Temperature = *req.Temperature
 	}
@@ -422,33 +370,38 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 		chatReq.TopP = *req.TopP
 	}
 
-	// 创建流式请求
 	stream, err := client.CreateChatCompletionStream(ctx, chatReq)
 	if err != nil {
-		fmt.Printf("[LLM] OpenAI client stream error for model %s: %v\n", req.Model, err)
+		log.Printf("[LLM] stream error model=%s: %v", req.Model, err)
 		errorChan <- err
 		return
 	}
 	defer stream.Close()
 
-	// 读取流式响应
 	for {
 		response, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
-			fmt.Printf("[LLM] Stream receive error: %v\n", err)
+			log.Printf("[LLM] stream recv error: %v", err)
 			errorChan <- err
 			return
 		}
 
-		// 转换为我们的格式
 		streamResp := &model.ChatStreamResponse{
 			ID:      response.ID,
 			Object:  response.Object,
 			Created: response.Created,
 			Model:   response.Model,
+		}
+
+		if response.Usage != nil {
+			streamResp.Usage = &model.Usage{
+				PromptTokens:     response.Usage.PromptTokens,
+				CompletionTokens: response.Usage.CompletionTokens,
+				TotalTokens:      response.Usage.TotalTokens,
+			}
 		}
 
 		for i, choice := range response.Choices {
@@ -457,15 +410,13 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 				reason := string(choice.FinishReason)
 				finishReason = &reason
 			}
-
-			streamChoice := model.ChatStreamChoice{
+			streamResp.Choices = append(streamResp.Choices, model.ChatStreamChoice{
 				Index: i, FinishReason: finishReason,
 				Delta: model.ChatStreamDelta{
 					Role:    choice.Delta.Role,
 					Content: choice.Delta.Content,
 				},
-			}
-			streamResp.Choices = append(streamResp.Choices, streamChoice)
+			})
 		}
 
 		select {
@@ -473,85 +424,5 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 		case <-ctx.Done():
 			return
 		}
-	}
-}
-
-// streamWithHTTP 使用 HTTP 进行流式调用
-func (s *RelayService) streamWithHTTP(ctx context.Context, req *model.ChatRequest, apiConfig *APIConfig, responseChan chan<- *model.ChatStreamResponse, errorChan chan<- error) {
-	fmt.Printf("[LLM] Using HTTP client stream for model: %s, BaseURL: %s\n", req.Model, apiConfig.BaseURL)
-
-	// 设置流式请求
-	streamReq := *req
-	streamReq.Stream = true
-
-	// 构建请求体
-	reqBody, err := json.Marshal(streamReq)
-	if err != nil {
-		errorChan <- err
-		return
-	}
-
-	// 创建 HTTP 请求
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", apiConfig.BaseURL+"/chat/completions", bytes.NewBuffer(reqBody))
-	if err != nil {
-		errorChan <- err
-		return
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+apiConfig.APIKey)
-	httpReq.Header.Set("Accept", "text/event-stream")
-
-	// 发送请求
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		errorChan <- err
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		errorChan <- fmt.Errorf("%w: %s", consts.ErrAPIError, string(body))
-		return
-	}
-
-	// 读取流式响应
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		// 跳过空行和注释行
-		if line == "" || strings.HasPrefix(line, ":") {
-			continue
-		}
-
-		// 处理 SSE 格式
-		if strings.HasPrefix(line, "data: ") {
-			data := strings.TrimPrefix(line, "data: ")
-
-			// 检查是否是结束标记
-			if data == "[DONE]" {
-				break
-			}
-
-			// 解析 JSON 数据
-			var streamResp model.ChatStreamResponse
-			if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
-				fmt.Printf("[LLM] Failed to parse stream data: %v\n", err)
-				continue
-			}
-
-			select {
-			case responseChan <- &streamResp:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		errorChan <- err
 	}
 }

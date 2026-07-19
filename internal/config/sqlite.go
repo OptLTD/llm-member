@@ -15,7 +15,14 @@ func GetSQLiteDB(cfg *Config) (*gorm.DB, error) {
 	}
 
 	filename := filepath.Join(cfg.Storage, "app.db")
-	return gorm.Open(sqlite.Open(filename), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open(filename), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
+	if err != nil {
+		return nil, err
+	}
+	if err := configureDBPool(db); err != nil {
+		return nil, err
+	}
+	return db, nil
 }

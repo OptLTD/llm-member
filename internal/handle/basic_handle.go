@@ -90,16 +90,22 @@ func (h *BasicHandle) GetUserUsage(c *gin.Context) {
 	})
 }
 
-// GetUserAPIKeys 获取用户API密钥
+// GetUserAPIKeys 获取用户API密钥（库内仅存 hash，不回显明文）
 func (h *BasicHandle) GetUserAPIKeys(c *gin.Context) {
-	user, err := h.userService.GetUserByID(c.GetUint64("UserID"))
+	hasKey, err := h.userService.HasAPIKey(c.GetUint64("UserID"))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
 		return
 	}
 
+	masked := ""
+	if hasKey {
+		masked = "sk-************************"
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"apiKey": user.APIKey,
+		"apiKey":  masked,
+		"hasKey":  hasKey,
+		"message": "明文 API Key 仅在注册或重置时返回一次，请使用重新生成获取新密钥",
 	})
 }
 

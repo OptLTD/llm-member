@@ -1,10 +1,13 @@
 package payment
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
+	"llm-member/internal/consts"
 	"llm-member/internal/model"
 )
 
@@ -13,7 +16,6 @@ type MockPayment struct {
 
 // Create 创建模拟支付订单，直接标记为成功
 func (m *MockPayment) Create(order *model.OrderModel) error {
-	// 模拟显示支付二维码
 	log.Printf("[mock][%s] payment created successfully", order.OrderID)
 	order.Status = model.PaymentPending
 	order.PayURL = "mock://payment/success"
@@ -23,7 +25,6 @@ func (m *MockPayment) Create(order *model.OrderModel) error {
 
 // Query 查询模拟支付状态，始终返回成功
 func (m *MockPayment) Query(order *model.OrderModel) error {
-	// 模拟查询成功, 手机扫码之后
 	log.Printf("[mock][%s] querying payment status", order.OrderID)
 	if order.Status == model.PaymentPending {
 		order.Status = model.PaymentSucceed
@@ -36,7 +37,6 @@ func (m *MockPayment) Query(order *model.OrderModel) error {
 
 // Close 关闭模拟支付订单
 func (m *MockPayment) Close(order *model.OrderModel) error {
-	// 模拟关闭成功
 	log.Printf("[mock][%s] payment closed successfully", order.OrderID)
 	order.Status = model.PaymentCanceled
 	return nil
@@ -44,27 +44,43 @@ func (m *MockPayment) Close(order *model.OrderModel) error {
 
 // Refund 模拟退款，直接标记为成功
 func (m *MockPayment) Refund(order *model.OrderModel) error {
-	// 模拟退款成功
 	log.Printf("[mock][%s] refund successful", order.OrderID)
 	order.Status = model.PaymentRefunded
 	return nil
 }
 
-// Webhook 模拟支付回调验证
+// Webhook 模拟支付回调：仅 debug/test 模式且校验密钥
 func (m *MockPayment) Webhook(req *http.Request) (*Event, error) {
-	// 模拟验证成功
-	log.Printf("[mock] webhook verification successful")
-
-	// 返回模拟的webhook事件
-	event := &Event{
-		Type:    "payment.success",
-		OrderID: "mock_order_id",
-		Status:  "success",
-		Amount:  99.99,
-
-		Data: make(object),
-		Time: time.Now().Unix(),
+	mode := os.Getenv("APP_MODE")
+	if mode != "debug" && mode != "test" {
+		return nil, fmt.Errorf("%w: mock webhook disabled in production", consts.ErrPaymentWebhookError)
+	}
+	secret := os.Getenv("MOCK_WEBHOOK_SECRET")
+	if secret == "" {
+		return nil, fmt.Errorf("%w: MOCK_WEBHOOK_SECRET not configured", consts.ErrWebhookSecretNotConfigured)
+	}
+	got := req.Header.Get("X-Mock-Webhook-Secret")
+	if got == "" {
+		got = req.URL.Query().Get("secret")
+	}
+	if got != secret {
+		return nil, fmt.Errorf("%w: invalid mock webhook secret", consts.ErrWebhookSignatureVerificationFailed)
 	}
 
-	return event, nil
+	log.Printf("[mock] webhook verification successful")
+	orderID := req.URL.Query().Get("order_id")
+	if orderID == "" {
+		orderID = req.Header.Get("X-Order-Id")
+	}
+	if orderID == "" {
+		return nil, consts.ErrPaymentWebhookMissingParams
+	}
+
+	return &Event{
+		Type:    "payment.success",
+		OrderID: orderID,
+		Status:  "success",
+		Data:    make(object),
+		Time:    time.Now().Unix(),
+	}, nil
 }

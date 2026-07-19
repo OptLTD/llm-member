@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"llm-member/internal/model"
 	"llm-member/internal/service"
 	"llm-member/internal/support"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AdminHandle struct {
@@ -32,7 +34,7 @@ func NewAdminHandle() *AdminHandle {
 	}
 }
 
-// CreateUser 用户注册
+// CreateUser 管理员创建用户
 func (h *AdminHandle) CreateUser(c *gin.Context) {
 	var req model.CreateUserReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -40,18 +42,42 @@ func (h *AdminHandle) CreateUser(c *gin.Context) {
 		return
 	}
 
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "密码加密失败"})
+		return
+	}
+
+	plainKey, err := support.GenerateAPIKey()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "API Key 生成失败"})
+		return
+	}
+
+	limit := service.DefaultBasicLimit()
+	if l, e := h.setupService.GetPlanLimit(model.PlanBasic); e == nil && l != nil {
+		limit = l
+	}
+
 	user := &model.UserModel{
 		Username: req.Username,
 		Email:    req.Email,
+		Password: string(hashedPassword),
+		APIKey:   support.HashAPIKey(plainKey),
+		IsActive: true,
+		Verified: true,
+		UserRole: model.RoleUser,
+		UserPlan: model.PlanBasic,
+		ApiLimit: limit,
+		ApiUsage: &model.ApiUsage{DayStamp: time.Now().Format("2006-01-02")},
 	}
-	user.APIKey, _ = support.GenerateAPIKey()
-	err := h.userService.CreateUser(user)
-	if err != nil {
+	if err := h.userService.CreateUser(user); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	user.APIKey = plainKey
 	c.JSON(http.StatusCreated, model.SignUpResponse{
-		User: user, APIKey: user.APIKey, Message: "注册成功",
+		User: user, APIKey: plainKey, Message: "注册成功",
 	})
 }
 

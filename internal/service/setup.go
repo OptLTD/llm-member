@@ -270,23 +270,30 @@ func (s *SetupService) createDefaultAdmin() error {
 		admin.Password = string(data)
 	}
 
-	// 生成 API Key
+	// 生成 API Key（入库存 hash）
+	plainKey := ""
 	if key, err := support.GenerateAPIKey(); err != nil {
 		return fmt.Errorf("failed to generate API key: %v", err)
 	} else {
-		admin.APIKey = key
+		plainKey = key
+		admin.APIKey = support.HashAPIKey(key)
 	}
 
 	// build plan limit
 	if limit, err := s.GetPlanLimit(model.PlanSuper); err == nil {
 		admin.ApiLimit, admin.UserPlan = limit, model.PlanSuper
 	} else {
+		admin.ApiLimit = DefaultBasicLimit()
+		admin.ApiLimit.DailyRequests = 100000
+		admin.ApiLimit.MonthlyRequests = 1000000
 		log.Println("GetPlanLimit error: ", err)
 	}
+	admin.ApiUsage = &model.ApiUsage{DayStamp: time.Now().Format("2006-01-02")}
 
 	if err := s.db.Create(&admin).Error; err != nil {
 		return fmt.Errorf("%w: %v", consts.ErrCreateAdminUserFailed, err)
 	}
+	log.Printf("[SETUP] Default admin created, API Key: %s", plainKey)
 	return nil
 }
 

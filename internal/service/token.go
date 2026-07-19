@@ -24,33 +24,37 @@ func NewTokenService() *TokenService {
 	}
 }
 
-// CheckUsage 检查用户使用限制
+// CheckUsage 检查用户使用限制（fail-closed：无 ApiLimit 则拒绝）
 func (ts *TokenService) CheckUsage(user *model.UserModel) error {
-	if user.ApiUsage == nil || user.ApiLimit == nil {
+	if user.ApiLimit == nil {
+		return consts.ErrQuotaNotConfigured
+	}
+	EnsureUsageReady(user)
+	if user.ApiUsage == nil {
 		return nil
 	}
 
 	usage, limit := user.ApiUsage, user.ApiLimit
 	switch limit.LimitMethod {
 	case "tokens":
-		if usage.TodayTokens >= limit.DailyTokens {
+		if limit.DailyTokens > 0 && usage.TodayTokens >= limit.DailyTokens {
 			return fmt.Errorf("%w (%d/%d)", consts.ErrDailyTokenLimitReached, usage.TodayTokens, limit.DailyTokens)
 		}
-		if usage.TotalTokens >= limit.MonthlyTokens {
+		if limit.MonthlyTokens > 0 && usage.TotalTokens >= limit.MonthlyTokens {
 			return fmt.Errorf("%w (%d/%d)", consts.ErrMonthlyTokenLimitReached, usage.TotalTokens, limit.MonthlyTokens)
 		}
 	case "requests":
-		if usage.TodayRequests >= limit.DailyRequests {
+		if limit.DailyRequests > 0 && usage.TodayRequests >= limit.DailyRequests {
 			return fmt.Errorf("%w (%d/%d)", consts.ErrDailyRequestLimitReached, usage.TodayRequests, limit.DailyRequests)
 		}
-		if usage.TotalRequests >= limit.MonthlyRequests {
+		if limit.MonthlyRequests > 0 && usage.TotalRequests >= limit.MonthlyRequests {
 			return fmt.Errorf("%w (%d/%d)", consts.ErrMonthlyRequestLimitReached, usage.TotalRequests, limit.MonthlyRequests)
 		}
 	case "projects":
-		if usage.TodayProjects >= limit.DailyProjects {
+		if limit.DailyProjects > 0 && usage.TodayProjects >= limit.DailyProjects {
 			return fmt.Errorf("%w (%d/%d)", consts.ErrDailyProjectLimitReached, usage.TodayProjects, limit.DailyProjects)
 		}
-		if usage.TotalProjects >= limit.MonthlyProjects {
+		if limit.MonthlyProjects > 0 && usage.TotalProjects >= limit.MonthlyProjects {
 			return fmt.Errorf("%w (%d/%d)", consts.ErrMonthlyProjectLimitReached, usage.TotalProjects, limit.MonthlyProjects)
 		}
 	}

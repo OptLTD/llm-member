@@ -2,6 +2,7 @@ package support
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"strings"
 )
@@ -66,11 +67,22 @@ func IsEmail(input string) bool {
 	return strings.Contains(input, "@") && strings.Contains(input, ".")
 }
 
-// generateAPIKey 生成随机 API Key
+// GenerateAPIKey 生成随机 API Key（明文，仅返回一次）
 func GenerateAPIKey() (string, error) {
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}
 	return "sk-" + hex.EncodeToString(bytes), nil
+}
+
+// HashAPIKey 对 API Key 做 SHA256，用于入库存储
+func HashAPIKey(apiKey string) string {
+	sum := sha256.Sum256([]byte(apiKey))
+	return hex.EncodeToString(sum[:])
+}
+
+// IsHashedAPIKey 判断是否已是 hash 形态（非 sk- 前缀）
+func IsHashedAPIKey(stored string) bool {
+	return stored != "" && !strings.HasPrefix(stored, "sk-")
 }

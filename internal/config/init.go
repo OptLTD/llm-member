@@ -19,19 +19,15 @@ type Config struct {
 	AppMode string
 	Storage string
 
-	Admin *AdminInfo
-	MySQL *MySQLConfig
-	Redis *RedisConfig
+	Admin    *AdminInfo
+	Postgres *PostgresConfig
+	Redis    *RedisConfig
 }
 
 type AdminInfo struct {
 	Username string
 	Password string
 }
-
-// MySQLConfig MySQL数据库配置
-
-// MailConfig 邮件配置
 
 func Load() *Config {
 	cfg := &Config{
@@ -43,13 +39,13 @@ func Load() *Config {
 		Storage: getEnv("DATA_PATH", "./storage"),
 		Version: getEnv("APP_VERSION", "v1.0.0"),
 
-		// MySQL配置
-		MySQL: &MySQLConfig{
-			Host: getEnv("MYSQL_HOST", "localhost"),
-			Port: getEnv("MYSQL_PORT", "3306"),
-			User: getEnv("MYSQL_USER", ""),
-			Pass: getEnv("MYSQL_PASS", ""),
-			Name: getEnv("MYSQL_NAME", ""),
+		// PostgreSQL配置
+		Postgres: &PostgresConfig{
+			Host: getEnv("POSTGRES_HOST", "localhost"),
+			Port: getEnv("POSTGRES_PORT", "5432"),
+			User: getEnv("POSTGRES_USER", ""),
+			Pass: getEnv("POSTGRES_PASS", ""),
+			Name: getEnv("POSTGRES_NAME", ""),
 		},
 		Admin: &AdminInfo{
 			Username: getEnv("ADMIN_USERNAME", ""),
@@ -67,8 +63,11 @@ func Load() *Config {
 	if url := getEnv("REDIS_URL", ""); url != "" {
 		cfg.Redis = &RedisConfig{Url: url}
 	}
-	if dsn := getEnv("MYSQL_DSN", ""); dsn != "" {
-		cfg.MySQL = &MySQLConfig{DSN: dsn}
+	if dsn := getEnv("POSTGRES_DSN", ""); dsn != "" {
+		cfg.Postgres = &PostgresConfig{DSN: dsn}
+	}
+	if dsn := getEnv("DATABASE_URL", ""); dsn != "" {
+		cfg.Postgres = &PostgresConfig{DSN: dsn}
 	}
 	return cfg
 }
@@ -78,9 +77,9 @@ var globalDB *gorm.DB
 func InitDB(cfg *Config) error {
 	var db *gorm.DB
 	var err error
-	// 检查是否配置了MySQL
-	if cfg.MySQL.Pass != "" || cfg.MySQL.DSN != "" {
-		db, err = GetMySQLDB(cfg.MySQL)
+	// 检查是否配置了 PostgreSQL
+	if cfg.Postgres.Pass != "" || cfg.Postgres.DSN != "" {
+		db, err = GetPostgresDB(cfg.Postgres)
 	} else {
 		db, err = GetSQLiteDB(cfg)
 	}

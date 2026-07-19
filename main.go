@@ -3,6 +3,8 @@ package main
 import (
 	"embed"
 	"log"
+	"os"
+	"strings"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -23,6 +25,8 @@ func main() {
 	}
 
 	var cfg = config.Load()
+	config.InitLogger(cfg)
+
 	if err := config.InitDB(cfg); err != nil {
 		log.Fatal("Failed to initialize database:", err)
 	}
@@ -32,17 +36,30 @@ func main() {
 
 	gin.SetMode(cfg.AppMode)
 	r := gin.Default()
+
+	origins := []string{"*"}
+	if v := os.Getenv("CORS_ORIGINS"); v != "" {
+		origins = nil
+		for _, o := range strings.Split(v, ",") {
+			o = strings.TrimSpace(o)
+			if o != "" {
+				origins = append(origins, o)
+			}
+		}
+	}
+	allowCredentials := true
+	for _, o := range origins {
+		if o == "*" {
+			allowCredentials = false
+			break
+		}
+	}
 	r.Use(cors.New(cors.Config{
-		AllowHeaders: []string{"*"},
-		AllowOrigins: []string{"*"},
-		ExposeHeaders: []string{
-			"Content-Length",
-		},
-		AllowMethods: []string{
-			"GET", "POST", "PUT",
-			"DELETE", "OPTIONS",
-		},
-		AllowCredentials: true,
+		AllowHeaders:     []string{"*"},
+		AllowOrigins:     origins,
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowCredentials: allowCredentials,
 	}))
 
 	r.Use(handle.StaticRouteHandle(cfg, webroot))
@@ -54,9 +71,10 @@ func main() {
 		authMiddle := auth.AuthMiddleware(authService)
 		keyMiddle := auth.APIKeyMiddleware(authService)
 
-		v1.POST("/build-token", authMiddle, authHandle.BuildCallbackToken) // 启用路由
+		v1.POST("/build-token", authMiddle, authHandle.BuildCallbackToken)
 		v1.POST("/verify-token", auth.NoneMiddleware(), authHandle.VerifyCallbackToken)
 		v1.POST("/user-profile", keyMiddle, authHandle.GetUserProfile)
+		v1.GET("/models", keyMiddle, relayHandle.ListModels)
 		v1.POST("/chat/completions", keyMiddle, relayHandle.ChatCompletions)
 	}
 
@@ -78,7 +96,6 @@ func main() {
 
 			s := handle.NewPublicHandler()
 			rootApi.POST("/pricing-plans", s.GetPricingPlans)
-			// order callback should public
 			rootApi.POST("/callback/:name", s.DoPaymentCallback)
 		}
 

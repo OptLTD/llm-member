@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -124,21 +126,33 @@ func (s *AuthService) SignUp(req *model.SignUpRequest) (*model.UserModel, error)
 		return nil, fmt.Errorf("%w: %v", consts.ErrPasswordEncryptionFailed, err)
 	}
 
-	// 生成 API Key
+	// 生成 API Key（明文仅返回一次，入库存 hash）
 	apiKey, err := support.GenerateAPIKey()
 	if err != nil {
 		return nil, fmt.Errorf("API Key 生成失败: %v", err)
 	}
 
+	// 默认配额：优先套餐，否则保守默认
+	setup := NewSetupService()
+	limit, err := setup.GetPlanLimit(model.PlanBasic)
+	if err != nil || limit == nil {
+		limit = DefaultBasicLimit()
+	}
+
+	today := time.Now().Format("2006-01-02")
 	// 创建新用户
 	user := &model.UserModel{
 		Email: req.Email, Username: req.Username,
-		APIKey: apiKey, Password: string(hashedPassword),
+		APIKey: support.HashAPIKey(apiKey), Password: string(hashedPassword),
 		UserRole: model.RoleUser, UserPlan: model.PlanBasic,
+		IsActive: true, ApiLimit: limit,
+		ApiUsage: &model.ApiUsage{DayStamp: today},
 	}
 	if err := s.userS.CreateUser(user); err != nil {
 		return nil, fmt.Errorf("%w: %v", consts.ErrUserCreationFailed, err)
 	}
+	// 响应中返回明文 key
+	user.APIKey = apiKey
 	return user, nil
 }
 
@@ -190,13 +204,21 @@ func (s *AuthService) ValidateSigninToken(token string) (*TokenInfo, bool) {
 	return s.GetToken(token)
 }
 
-// ValidateAPIKey 验证 API Key
+// ValidateAPIKey 验证 API Key 并检查账户状态
 func (s *AuthService) ValidateAPIKey(apiKey string) (*model.UserModel, error) {
 	user, err := s.userS.GetUserByAPIKey(apiKey)
 	if err != nil {
 		return nil, consts.ErrInvalidAPIKey
 	}
-
+	if !user.IsActive {
+		return nil, consts.ErrUserAccountDisabled
+	}
+	if !user.Verified {
+		return nil, consts.ErrUserAccountNotVerified
+	}
+	if user.ExpireAt != nil && user.ExpireAt.Before(time.Now()) {
+		return nil, consts.ErrAPIKeyAccountExpired
+	}
 	return user, nil
 }
 
@@ -447,12 +469,16 @@ func (s *AuthService) GenerateCallbackToken(user *model.UserModel) (string, erro
 	return token, nil
 }
 
-// GenerateCallbackSign 生成回调签名
+// GenerateCallbackSign 使用 APP_SECRET 做 HMAC-SHA256 签名
 func (s *AuthService) GenerateCallbackSign(token, email, suff string) (string, error) {
-	// 使用简单的签名算法，实际项目中应使用更安全的方法
+	secret := os.Getenv("APP_SECRET")
+	if secret == "" {
+		return "", consts.ErrAppSecretNotConfigured
+	}
 	data := fmt.Sprintf("%s:%s:%s", token, email, suff)
-	hash := sha256.Sum256([]byte(data))
-	return fmt.Sprintf("sn-%x", hash[:16]), nil
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(data))
+	return fmt.Sprintf("sn-%x", mac.Sum(nil)[:16]), nil
 }
 
 // ValidateCallbackToken 验证 token

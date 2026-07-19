@@ -10,15 +10,15 @@ services:
       - APP_DESC=LLM会员管理系统
       - DATA_PATH=/app/storage
       # 数据库配置
-      - MYSQL_HOST=mysql
-      - MYSQL_PORT=3306
-      - MYSQL_USER=root
-      - MYSQL_PASS=123456
-      - MYSQL_NAME=demo
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASS=123456
+      - POSTGRES_NAME=demo
       # Redis配置
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=123456
+      - REDIS_PASS=123456
       - REDIS_DB=0
       # - APP_MODE=release # release
       # 管理员配置（请修改默认密码）
@@ -42,38 +42,30 @@ services:
     networks:
       - llm-network
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
 
-  mysql:
-    image: mysql:8.0
+  postgres:
+    image: postgres:16-alpine
     environment:
-      # - MYSQL_USER=root
-      - MYSQL_DATABASE=demo
-      - MYSQL_PASSWORD=123456
-      - MYSQL_ROOT_PASSWORD=123456
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=123456
+      - POSTGRES_DB=demo
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - postgres_data:/var/lib/postgresql/data
     ports:
-      - "3306:3306"
+      - "5432:5432"
     restart: unless-stopped
-    command: >
-      --default-authentication-plugin=mysql_native_password
-      --character-set-server=utf8mb4
-      --collation-server=utf8mb4_unicode_ci
-      --innodb-buffer-pool-size=256M
-      --max-connections=200
     networks:
       - llm-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_password"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "pg_isready -U postgres -d demo"]
+      interval: 10s
+      timeout: 5s
       retries: 5
-      start_period: 60s
+      start_period: 30s
 
   redis:
     image: redis:latest
@@ -95,7 +87,7 @@ services:
 volumes:
   llm_storage:
     driver: local
-  mysql_data:
+  postgres_data:
     driver: local
   redis_data:
     driver: local

@@ -25,11 +25,20 @@ func (s *UserService) CreateUser(user *model.UserModel) error {
 	return s.db.Create(user).Error
 }
 
-// GetUserByAPIKey 根据 API Key 获取用户
+// GetUserByAPIKey 根据 API Key 获取用户（支持 hash 存储与明文惰性迁移）
 func (s *UserService) GetUserByAPIKey(apiKey string) (*model.UserModel, error) {
 	var user model.UserModel
+	hashed := support.HashAPIKey(apiKey)
+	if err := s.db.Where("api_key = ?", hashed).First(&user).Error; err == nil {
+		return &user, nil
+	}
+	// 兼容旧明文 key，命中后迁移为 hash
 	if err := s.db.Where("api_key = ?", apiKey).First(&user).Error; err != nil {
 		return nil, err
+	}
+	if !support.IsHashedAPIKey(user.APIKey) {
+		_ = s.db.Model(&user).Update("api_key", hashed).Error
+		user.APIKey = hashed
 	}
 	return &user, nil
 }
@@ -108,18 +117,19 @@ func (s *UserService) RegenerateKey(userID uint64) (*model.UserModel, error) {
 		return nil, consts.ErrUserNotFound
 	}
 
-	// 生成新的 API Key
+	// 生成新的 API Key（明文返回，入库存 hash）
 	apiKey, err := support.GenerateAPIKey()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", consts.ErrAPIKeyGenerationFailed, err)
 	}
 
-	user.APIKey = apiKey
+	user.APIKey = support.HashAPIKey(apiKey)
 	if err := s.db.Save(&user).Error; err != nil {
 		return nil, fmt.Errorf("%w: %v", consts.ErrAPIKeyUpdateFailed, err)
 	}
 
 	user.Password = ""
+	user.APIKey = apiKey
 	return &user, nil
 }
 
@@ -135,7 +145,17 @@ func (s *UserService) GetUserByID(userID uint64) (*model.UserModel, error) {
 		return nil, err
 	}
 	user.Password = ""
+	user.APIKey = ""
 	return &user, nil
+}
+
+// HasAPIKey 检查用户是否已配置 API Key
+func (s *UserService) HasAPIKey(userID uint64) (bool, error) {
+	var user model.UserModel
+	if err := s.db.Select("api_key").First(&user, userID).Error; err != nil {
+		return false, err
+	}
+	return user.APIKey != "", nil
 }
 
 // GetUserByID 根据 ID 获取用户
@@ -182,9 +202,10 @@ func (s *UserService) QueryUsers(req *model.PaginateRequest) (*model.PaginateRes
 		return nil, err
 	}
 
-	// 清除密码字段
+	// 清除密码与 API Key hash
 	for i := range users {
 		users[i].Password = ""
+		users[i].APIKey = ""
 	}
 
 	// 构造响应

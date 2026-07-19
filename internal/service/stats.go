@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"time"
 
 	"llm-member/internal/config"
@@ -8,6 +9,15 @@ import (
 
 	"gorm.io/gorm"
 )
+
+// jsonIntExpr 按数据库方言从 JSON 文本字段提取整数值
+func jsonIntExpr(db *gorm.DB, column, key string) string {
+	if db.Dialector.Name() == "postgres" {
+		return fmt.Sprintf("(%s::json->>'%s')::bigint", column, key)
+	}
+	// SQLite / 其他：JSON_EXTRACT
+	return fmt.Sprintf("CAST(JSON_EXTRACT(%s, '$.%s') AS INTEGER)", column, key)
+}
 
 type StatsService struct {
 	db *gorm.DB
@@ -54,20 +64,19 @@ func (s *StatsService) getAPIStats(stats *model.StatsResponse) error {
 		Count(&stats.TotalRequests)
 
 	// 使用JSON函数直接从all_usage字段提取token统计（当前月）
-	// MySQL和SQLite都支持JSON_EXTRACT函数
 	s.db.Model(&model.LlmLogModel{}).
 		Where("status = ? AND req_time >= ? AND req_time < ?", "success", monthStart, nextMonth).
-		Select("COALESCE(SUM(CAST(JSON_EXTRACT(all_usage, '$.totalTokens') AS SIGNED)), 0)").
+		Select(fmt.Sprintf("COALESCE(SUM(%s), 0)", jsonIntExpr(s.db, "all_usage", "totalTokens"))).
 		Scan(&stats.TotalTokens)
 
 	s.db.Model(&model.LlmLogModel{}).
 		Where("status = ? AND req_time >= ? AND req_time < ?", "success", monthStart, nextMonth).
-		Select("COALESCE(SUM(CAST(JSON_EXTRACT(all_usage, '$.promptTokens') AS SIGNED)), 0)").
+		Select(fmt.Sprintf("COALESCE(SUM(%s), 0)", jsonIntExpr(s.db, "all_usage", "promptTokens"))).
 		Scan(&stats.InputTokens)
 
 	s.db.Model(&model.LlmLogModel{}).
 		Where("status = ? AND req_time >= ? AND req_time < ?", "success", monthStart, nextMonth).
-		Select("COALESCE(SUM(CAST(JSON_EXTRACT(all_usage, '$.completionTokens') AS SIGNED)), 0)").
+		Select(fmt.Sprintf("COALESCE(SUM(%s), 0)", jsonIntExpr(s.db, "all_usage", "completionTokens"))).
 		Scan(&stats.OutputTokens)
 
 	// 平均响应时间（当前月）
@@ -175,77 +184,13 @@ func (s *StatsService) getOrderStats(stats *model.StatsResponse) error {
 	return nil
 }
 
-// UpdateUserStats 更新用户统计信息
+// UpdateUserStats 增量刷新已由 QuotaService.Commit 完成；保留接口供管理端手动触发轻量日切
 func (s *StatsService) UpdateUserStats(user *model.UserModel) error {
-	// 获取当前时间信息
-	today := time.Now().Truncate(24 * time.Hour)
-	monthStart := time.Date(
-		time.Now().Year(), time.Now().Month(),
-		1, 0, 0, 0, 0, time.Now().Location(),
-	)
-
-	// 初始化 ApiUsage 结构
-	var apiUsage = model.ApiUsage{}
-
-	// 统计总的使用量（所有时间）- 一次查询获取三个数据
-	var totalStats struct {
-		TotalTokens   uint64
-		TotalRequests uint64
-		TotalProjects uint64
+	if user == nil {
+		return nil
 	}
-
-	// 使用子查询一次性获取总统计数据
-	allAgg := `
-		COUNT(*) as TotalRequests,
-		COALESCE(SUM(CAST(JSON_EXTRACT(all_usage, '$.totalTokens') AS SIGNED)), 0) as TotalTokens,
-		(
-			SELECT COUNT(DISTINCT proj_id) FROM llm_log 
-			WHERE status = 'success' AND user_id = ? AND req_time >= ?
-		) as TotalProjects
-	`
-	result := s.db.Model(&model.LlmLogModel{}).
-		Where("status = ? AND user_id = ? AND req_time >= ?", "success", user.ID, monthStart).
-		Select(allAgg, user.ID, monthStart).Scan(&totalStats)
-	if result.Error != nil {
-		return result.Error
-	}
-
-	// 统计时间范围内的使用量
-	var periodStats struct {
-		PeriodRequests uint64
-		PeriodTokens   uint64
-		PeriodProjects uint64
-	}
-
-	// 使用子查询一次性获取时间段统计数据
-	periodAgg := `
-		COUNT(*) as PeriodRequests,
-		COALESCE(SUM(CAST(JSON_EXTRACT(all_usage, '$.totalTokens') AS SIGNED)), 0) as PeriodTokens,
-		(
-			SELECT COUNT(DISTINCT proj_id)  FROM llm_log
-			WHERE status = 'success' AND user_id = ? AND req_time >= ?
-		) as PeriodProjects
-	`
-	result = s.db.Model(&model.LlmLogModel{}).
-		Where("status = 'success' AND user_id = ? AND req_time >= ?", user.ID, today).
-		Select(periodAgg, user.ID, today).Scan(&periodStats)
-
-	if result.Error != nil {
-		return result.Error
-	}
-
-	// 赋值总统计数据
-	apiUsage.TotalTokens = totalStats.TotalTokens
-	apiUsage.TotalRequests = totalStats.TotalRequests
-	apiUsage.TotalProjects = totalStats.TotalProjects
-
-	// 赋值时间段统计数据（今日数据）
-	apiUsage.TodayTokens = periodStats.PeriodTokens
-	apiUsage.TodayRequests = periodStats.PeriodRequests
-	apiUsage.TodayProjects = periodStats.PeriodProjects
-
-	// 构建更新数据
-	var query = s.db.Model(&model.UserModel{})
-	var data = map[string]any{"api_usage": apiUsage}
-	return query.Where("id = ?", user.ID).Updates(data).Error
+	EnsureUsageReady(user)
+	return s.db.Model(&model.UserModel{}).
+		Where("id = ?", user.ID).
+		Update("api_usage", user.ApiUsage).Error
 }

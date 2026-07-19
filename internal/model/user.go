@@ -156,6 +156,9 @@ type ApiUsage struct {
 	TodayTokens   uint64 `json:"todayTokens"`
 	TodayRequests uint64 `json:"todayRequests"`
 	TodayProjects uint64 `json:"todayProjects"`
+
+	// DayStamp 用于日切重置 Today* 字段，格式 YYYY-MM-DD
+	DayStamp string `json:"dayStamp,omitempty"`
 }
 type ApiLimit struct {
 	// 过期天数

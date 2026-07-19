@@ -6,6 +6,7 @@ import (
 	"llm-member/internal/model"
 	"llm-member/internal/service"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ type RelayHandle struct {
 	relayService *service.RelayService
 	setupService *service.SetupService
 	tokenService *service.TokenService
+	quotaService *service.QuotaService
 	statsService *service.StatsService
 }
 
@@ -28,6 +30,7 @@ func NewRelayHandle() *RelayHandle {
 		relayService: service.NewRelayService(),
 		setupService: service.NewSetupService(),
 		tokenService: service.NewTokenService(),
+		quotaService: service.NewQuotaService(),
 		statsService: service.NewStatsService(),
 	}
 }
@@ -42,7 +45,6 @@ func (h *RelayHandle) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	// 获取用户信息
 	var startTime = time.Now()
 	var userInfo *model.UserModel
 	if user, exists := c.Get("user"); !exists {
@@ -57,38 +59,65 @@ func (h *RelayHandle) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	// 调用 LLM 服务
-	ctx, cancel := context.WithTimeout(
-		context.Background(),
-		180*time.Second,
-	)
+	reserveAmount := uint64(1)
+	if userInfo.ApiLimit != nil && userInfo.ApiLimit.LimitMethod == "tokens" {
+		if n, err := h.tokenService.CountMsgsToken(req.Messages, req.Model, req.Stream); err == nil && n > 0 {
+			reserveAmount = uint64(n)
+		}
+	}
+
+	reservation, err := h.quotaService.Reserve(userInfo, reserveAmount)
+	if err != nil {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 180*time.Second)
 	defer cancel()
 
-	// 创建通用的日志记录
+	storeBody := os.Getenv("LOG_STORE_BODY") == "true" || os.Getenv("LOG_STORE_BODY") == "1"
+
 	finishCallback := func(err error, resp *model.ChatResponse) {
+		if err != nil {
+			_ = h.quotaService.Rollback(userInfo, reservation)
+		} else {
+			actual := reservation.Amount
+			if resp != nil && userInfo.ApiLimit != nil && userInfo.ApiLimit.LimitMethod == "tokens" {
+				if resp.Usage.TotalTokens > 0 {
+					actual = uint64(resp.Usage.TotalTokens)
+				}
+			}
+			_ = h.quotaService.Commit(userInfo, reservation, actual)
+		}
+
 		duration := time.Since(startTime).Milliseconds()
 		provider := h.relayService.GetProvider(req.Model)
 		logEntry := &model.LlmLogModel{
 			UserID: userInfo.ID, Duration: duration,
 			Provider: provider, TheModel: req.Model,
-			Messages: req.Messages, Response: resp,
 			ReqTime: time.Now(), ClientIP: c.ClientIP(),
 			UserAgent: c.GetHeader("User-Agent"),
+		}
+		if storeBody {
+			logEntry.Messages = req.Messages
+			logEntry.Response = resp
 		}
 		if c.GetHeader("X-Project-Id") != "" {
 			logEntry.ProjID = c.GetHeader("X-Project-Id")
 		}
 		if err != nil {
 			logEntry.Status = "failure"
-			logEntry.ErrorMsg = err.Error()
-		} else {
+			msg := err.Error()
+			if len(msg) > 256 {
+				msg = msg[:256]
+			}
+			logEntry.ErrorMsg = msg
+		} else if resp != nil {
 			logEntry.Status = "success"
 			logEntry.ChatID = resp.ID
 			logEntry.AllUsage = resp.Usage
 		}
-		if err := h.logService.CreateLog(logEntry); err == nil {
-			h.statsService.UpdateUserStats(userInfo)
-		}
+		_ = h.logService.CreateLog(logEntry)
 	}
 
 	if req.Stream {
@@ -101,12 +130,10 @@ func (h *RelayHandle) ChatCompletions(c *gin.Context) {
 // handleNonStreamResponse 处理非流式响应
 func (h *RelayHandle) handleNonStreamResponse(c *gin.Context, ctx context.Context, req *model.ChatRequest, callback FinishCallback) {
 	response, err := h.relayService.ChatCompletions(ctx, req)
-	// 调用callback处理日志
 	if callback != nil {
 		go callback(err, response)
 	}
 
-	// 返回响应给客户端
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -116,31 +143,25 @@ func (h *RelayHandle) handleNonStreamResponse(c *gin.Context, ctx context.Contex
 }
 
 func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, req *model.ChatRequest, callback FinishCallback) {
-	// 设置流式响应头
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
-	c.Header("Access-Control-Allow-Origin", "*")
 	c.Header("X-Accel-Buffering", "no")
 
-	// 获取流式响应通道
 	respChan, errorChan := h.relayService.ChatCompletionsStream(ctx, req)
 
-	// 准备日志数据
 	var streamErr error
 	var accumulatedContent strings.Builder
+	var providerUsage *model.Usage
 	var response = &model.ChatResponse{
 		Object: "chat.completion", Usage: model.Usage{},
 		Model: req.Model, Choices: []model.ChatChoice{},
 	}
 
-	// 定义完成处理的内部函数
 	logAndFinish := func(err error) {
-		// 发送结束标记
 		c.Writer.Write([]byte("data: [DONE]\n\n"))
 		c.Writer.Flush()
 
-		// 调用外部传入的callback
 		if callback != nil {
 			response.Choices = append(response.Choices, model.ChatChoice{
 				Index: 0, FinishReason: "stop",
@@ -149,45 +170,48 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 				},
 			})
 
-			// 计算prompt tokens
-			promptTokens, _ := h.tokenService.CountMsgsToken(
-				req.Messages, req.Model, true,
-			)
-			completionTokens := h.tokenService.CountTextToken(
-				accumulatedContent.String(), req.Model,
-			)
-			response.Usage = model.Usage{
-				PromptTokens:     promptTokens,
-				CompletionTokens: completionTokens,
-				TotalTokens:      promptTokens + completionTokens,
+			if providerUsage != nil && providerUsage.TotalTokens > 0 {
+				response.Usage = *providerUsage
+			} else {
+				promptTokens, _ := h.tokenService.CountMsgsToken(
+					req.Messages, req.Model, true,
+				)
+				completionTokens := h.tokenService.CountTextToken(
+					accumulatedContent.String(), req.Model,
+				)
+				response.Usage = model.Usage{
+					PromptTokens:     promptTokens,
+					CompletionTokens: completionTokens,
+					TotalTokens:      promptTokens + completionTokens,
+				}
 			}
 			go callback(err, response)
 		}
 	}
 
-	// 处理流式数据
 	for {
 		select {
 		case resp, ok := <-respChan:
-			if !ok { // 流结束
+			if !ok {
 				logAndFinish(streamErr)
 				return
 			}
 
-			// 累积响应数据
 			if response.ID == "" {
 				response.ID = resp.ID
 				response.Created = resp.Created
 			}
 
-			// 累积内容
+			if resp.Usage != nil && resp.Usage.TotalTokens > 0 {
+				providerUsage = resp.Usage
+			}
+
 			for _, choice := range resp.Choices {
 				if choice.Delta.Content != "" {
 					accumulatedContent.WriteString(choice.Delta.Content)
 				}
 			}
 
-			// 发送数据到客户端
 			data, _ := json.Marshal(resp)
 			c.Writer.Write([]byte("data: "))
 			c.Writer.Write(data)
@@ -196,7 +220,6 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 		case err, ok := <-errorChan:
 			if ok && err != nil {
 				streamErr = err
-				// 发送错误信息
 				errorData := map[string]interface{}{
 					"error": map[string]string{
 						"message": err.Error(),
@@ -217,4 +240,13 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 			return
 		}
 	}
+}
+
+// ListModels OpenAI 兼容的模型列表
+func (h *RelayHandle) ListModels(c *gin.Context) {
+	models := h.relayService.GetModels()
+	c.JSON(http.StatusOK, gin.H{
+		"object": "list",
+		"data":   models,
+	})
 }
