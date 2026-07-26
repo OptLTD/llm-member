@@ -1,0 +1,43 @@
+:root {
+  --text: #64748b;
+  --text-h: #0f172a;
+  --bg: #f8fafc;
+  --border: #e2e8f0;
+  --accent: #6366f1;
+  --accent-dark: #4f46e5;
+  --sidebar-bg: #1f2937;
+
+  --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-h);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+#app {
+  min-height: 100vh;
+}

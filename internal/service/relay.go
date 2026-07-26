@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"llm-member/internal/config"
-	"llm-member/internal/consts"
-	"llm-member/internal/model"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/consts"
+	"github.com/OptLTD/member/internal/model"
 
 	"github.com/sashabaranov/go-openai"
 )
@@ -84,194 +84,62 @@ func (s *RelayService) ChatCompletionsStream(ctx context.Context, req *model.Cha
 	return respChan, errorChan
 }
 
-func isNativeNonCompatibleURL(provider, baseURL string) bool {
+func isNativeNonCompatibleURL(baseURL string) bool {
 	u := strings.ToLower(baseURL)
-	switch provider {
-	case "claude":
-		return strings.Contains(u, "api.anthropic.com")
-	case "gemini":
-		return strings.Contains(u, "generativelanguage.googleapis.com")
-	default:
-		return false
-	}
+	return strings.Contains(u, "api.anthropic.com") ||
+		strings.Contains(u, "generativelanguage.googleapis.com")
 }
 
 func (s *RelayService) GetAPIConfig(modelName string) (*APIConfig, error) {
-	apiConfig := &APIConfig{}
-	apiConfig.Provider = s.GetProvider(modelName)
-	if modelName == "" || modelName == "auto-match" {
-		if models := s.GetModels(); len(models) > 0 {
-			apiConfig.Provider = models[0].Provider
-			apiConfig.ReqModel = models[0].ID
-		}
+	llm := config.GetLLM()
+	if llm == nil {
+		return nil, consts.ErrProviderNotConfigured
 	}
-	if apiConfig.Provider == "unknown" {
-		return nil, fmt.Errorf("%w: %s", consts.ErrUnsupportedModel, modelName)
-	}
-
-	providerName := apiConfig.Provider
-	provider := config.GetProvider(providerName)
-	if provider == nil {
-		log.Printf("[LLM] Provider %s not found in config", providerName)
-		return nil, fmt.Errorf("%w: %s", consts.ErrProviderNotConfigured, providerName)
-	}
-	apiConfig.APIKey = provider.APIKey
-	apiConfig.BaseURL = provider.BaseURL
-
-	if isNativeNonCompatibleURL(providerName, provider.BaseURL) {
+	if isNativeNonCompatibleURL(llm.BaseURL) {
 		return nil, fmt.Errorf(
-			"%w: provider %s BaseURL %q is not OpenAI-compatible; use a compatible gateway (e.g. OpenRouter) or set an OpenAI-compatible BaseURL",
-			consts.ErrProviderNotConfigured, providerName, provider.BaseURL,
+			"%w: LLM_BASE_URL %q is not OpenAI-compatible; use a compatible gateway",
+			consts.ErrProviderNotConfigured, llm.BaseURL,
 		)
 	}
 
-	return apiConfig, nil
+	reqModel := modelName
+	if reqModel == "" || reqModel == "auto-match" {
+		reqModel = llm.DefaultModel
+		if reqModel == "" && len(llm.Models) > 0 {
+			reqModel = llm.Models[0]
+		}
+		if reqModel == "" {
+			return nil, fmt.Errorf("%w: set LLM_DEFAULT_MODEL or pass model in request", consts.ErrUnsupportedModel)
+		}
+	}
+
+	return &APIConfig{
+		BaseURL:  llm.BaseURL,
+		APIKey:   llm.APIKey,
+		Provider: llm.Provider,
+		ReqModel: reqModel,
+	}, nil
 }
 
 func (s *RelayService) GetModels() []model.LLModelInfo {
-	var modelList []model.LLModelInfo
-
-	if config.HasProvider("openai") {
-		modelList = append(modelList, []model.LLModelInfo{
-			{ID: "gpt-4", Object: "model", Provider: "openai", Name: "GPT-4"},
-			{ID: "gpt-4-turbo", Object: "model", Provider: "openai", Name: "GPT-4 Turbo"},
-			{ID: "gpt-3.5-turbo", Object: "model", Provider: "openai", Name: "GPT-3.5 Turbo"},
-			{ID: "gpt-4o", Object: "model", Provider: "openai", Name: "GPT-4o"},
-			{ID: "gpt-4o-mini", Object: "model", Provider: "openai", Name: "GPT-4o Mini"},
-		}...)
+	llm := config.GetLLM()
+	if llm == nil {
+		return nil
 	}
-
-	if config.HasProvider("claude") {
-		modelList = append(modelList, []model.LLModelInfo{
-			{ID: "claude-3-5-sonnet-20241022", Object: "model", Provider: "claude", Name: "Claude 3.5 Sonnet"},
-			{ID: "claude-3-5-haiku-20241022", Object: "model", Provider: "claude", Name: "Claude 3.5 Haiku"},
-			{ID: "claude-3-opus-20240229", Object: "model", Provider: "claude", Name: "Claude 3 Opus"},
-		}...)
+	out := make([]model.LLModelInfo, 0, len(llm.Models))
+	for _, id := range llm.Models {
+		out = append(out, model.LLModelInfo{
+			ID: id, Object: "model", Provider: llm.Provider, Name: id,
+		})
 	}
-
-	if config.HasProvider("qwen") {
-		modelList = append(modelList, []model.LLModelInfo{
-			{ID: "qwen-turbo", Object: "model", Provider: "qwen", Name: "通义千问 Turbo"},
-			{ID: "qwen-plus", Object: "model", Provider: "qwen", Name: "通义千问 Plus"},
-			{ID: "qwen-max", Object: "model", Provider: "qwen", Name: "通义千问 Max"},
-			{ID: "qwen2.5-72b-instruct", Object: "model", Provider: "qwen", Name: "通义千问 2.5 72B"},
-		}...)
-	}
-
-	if config.HasProvider("doubao") {
-		modelList = append(modelList, []model.LLModelInfo{
-			{ID: "doubao-seed-1-6-250615", Object: "model", Provider: "doubao", Name: "豆包 Seed 1.6"},
-		}...)
-	}
-
-	if config.HasProvider("bigmodel") {
-		modelList = append(modelList, []model.LLModelInfo{
-			{ID: "glm-4", Object: "model", Provider: "bigmodel", Name: "GLM-4"},
-			{ID: "glm-4-plus", Object: "model", Provider: "bigmodel", Name: "GLM-4 Plus"},
-			{ID: "glm-4-air", Object: "model", Provider: "bigmodel", Name: "GLM-4 Air"},
-			{ID: "glm-4-flash", Object: "model", Provider: "bigmodel", Name: "GLM-4 Flash"},
-		}...)
-	}
-
-	if config.HasProvider("grok") {
-		modelList = append(modelList, []model.LLModelInfo{
-			{ID: "grok-beta", Object: "model", Provider: "grok", Name: "Grok Beta"},
-			{ID: "grok-vision-beta", Object: "model", Provider: "grok", Name: "Grok Vision Beta"},
-		}...)
-	}
-
-	if config.HasProvider("gemini") {
-		modelList = append(modelList, []model.LLModelInfo{
-			{ID: "gemini-1.5-pro", Object: "model", Provider: "gemini", Name: "Gemini 1.5 Pro"},
-			{ID: "gemini-1.5-flash", Object: "model", Provider: "gemini", Name: "Gemini 1.5 Flash"},
-			{ID: "gemini-pro", Object: "model", Provider: "gemini", Name: "Gemini Pro"},
-		}...)
-	}
-
-	if config.HasProvider("openrouter") {
-		modelList = append(modelList, []model.LLModelInfo{
-			{ID: "openai/gpt-4o", Object: "model", Provider: "openrouter", Name: "GPT-4o (OpenRouter)"},
-			{ID: "anthropic/claude-3.5-sonnet", Object: "model", Provider: "openrouter", Name: "Claude 3.5 Sonnet (OpenRouter)"},
-			{ID: "google/gemini-pro-1.5", Object: "model", Provider: "openrouter", Name: "Gemini Pro 1.5 (OpenRouter)"},
-		}...)
-	}
-
-	if config.HasProvider("siliconflow") {
-		modelList = append(modelList, []model.LLModelInfo{
-			{ID: "qwen/qwen2.5-72b-instruct", Object: "model", Provider: "siliconflow", Name: "Qwen2.5 72B"},
-			{ID: "meta-llama/llama-3.1-405b-instruct", Object: "model", Provider: "siliconflow", Name: "Llama 3.1 405B"},
-		}...)
-	}
-
-	if config.HasProvider("deepseek") {
-		modelList = append(modelList, []model.LLModelInfo{
-			{ID: "deepseek-chat", Object: "model", Provider: "deepseek", Name: "DeepSeek Chat"},
-			{ID: "deepseek-coder", Object: "model", Provider: "deepseek", Name: "DeepSeek Coder"},
-			{ID: "deepseek-reasoner", Object: "model", Provider: "deepseek", Name: "DeepSeek Reasoner"},
-		}...)
-	}
-
-	if config.HasProvider("openai-like") {
-		modelList = append(modelList, []model.LLModelInfo{
-			{ID: "custom-model", Object: "model", Provider: "openai-like", Name: "Custom Model"},
-		}...)
-	}
-
-	return modelList
+	return out
 }
 
+// GetProvider 返回当前上游标签（单一配置，与 model 无关）
 func (s *RelayService) GetProvider(modelName string) string {
-	// 含 provider 前缀的斜杠模型：先按已知前缀区分
-	if strings.Contains(modelName, "/") {
-		lower := strings.ToLower(modelName)
-		switch {
-		case strings.HasPrefix(lower, "qwen/"),
-			strings.HasPrefix(lower, "meta-llama/"),
-			strings.HasPrefix(lower, "deepseek/"):
-			if config.HasProvider("siliconflow") {
-				return "siliconflow"
-			}
-		case strings.HasPrefix(lower, "openai/"),
-			strings.HasPrefix(lower, "anthropic/"),
-			strings.HasPrefix(lower, "google/"):
-			if config.HasProvider("openrouter") {
-				return "openrouter"
-			}
-		}
-		if config.HasProvider("openrouter") {
-			return "openrouter"
-		}
-		if config.HasProvider("siliconflow") {
-			return "siliconflow"
-		}
-	}
-
-	if strings.HasPrefix(modelName, "gpt-") {
-		return "openai"
-	}
-	if strings.HasPrefix(modelName, "claude-") {
-		return "claude"
-	}
-	if strings.HasPrefix(modelName, "qwen-") || strings.HasPrefix(modelName, "qwen2") {
-		return "qwen"
-	}
-	if strings.HasPrefix(modelName, "doubao-") {
-		return "doubao"
-	}
-	if strings.HasPrefix(modelName, "glm-") {
-		return "bigmodel"
-	}
-	if strings.HasPrefix(modelName, "deepseek-") {
-		return "deepseek"
-	}
-	if strings.HasPrefix(modelName, "grok-") {
-		return "grok"
-	}
-	if strings.HasPrefix(modelName, "gemini-") {
-		return "gemini"
-	}
-	if modelName == "custom-model" {
-		return "openai-like"
+	_ = modelName
+	if llm := config.GetLLM(); llm != nil {
+		return llm.Provider
 	}
 	return "unknown"
 }

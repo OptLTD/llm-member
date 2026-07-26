@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Auth Callback</title>
+</head>
+<body>
+  <p>正在验证登录...</p>
+  <script>
+    (async () => {
+      const p = new URLSearchParams(location.search);
+      const token = p.get('token');
+      const sign = p.get('sign');
+      const time = p.get('time');
+      if (!token) { document.body.textContent = '缺少 token'; return; }
+      const res = await fetch('/v1/verify-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, sign, time }),
+      });
+      const data = await res.json();
+      if (!res.ok) { document.body.textContent = data.error || '验证失败'; return; }
+      localStorage.setItem('token', data.apiToken || token);
+      const deviceId = localStorage.getItem('member_device_id') || crypto.randomUUID();
+      localStorage.setItem('member_device_id', deviceId);
+      await fetch('/api/device/bind', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + (data.apiToken || token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, platform: navigator.platform }),
+      }).catch(() => {});
+      document.body.textContent = '登录成功，可关闭此页返回应用。';
+    })();
+  </script>
+</body>
+</html>

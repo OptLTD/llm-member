@@ -10,14 +10,16 @@ type method = PaymentMethod
 
 // PlanInfo 套餐信息
 type PlanInfo struct {
-	Plan     string   `json:"plan" binding:"required"`
-	Name     string   `json:"name" binding:"required"`
-	Brief    string   `json:"brief" binding:"required"`
-	Price    float64  `json:"price" binding:"required"`
-	Usage    string   `json:"usage" binding:"required"`  // 用量
-	Period   string   `json:"period" binding:"required"` // 周期
-	Enabled  bool     `json:"enabled" binding:"required"`
-	Features []string `json:"features" binding:"required"`
+	Plan       string   `json:"plan" binding:"required"`
+	Name       string   `json:"name" binding:"required"`
+	Brief      string   `json:"brief"`
+	Price      float64  `json:"price" binding:"gte=0"` // 允许 0（免费方案）；required 会把 0 判失败
+	Usage      string   `json:"usage" binding:"required"`
+	Period     string   `json:"period" binding:"required"`
+	Enabled    bool     `json:"enabled"`
+	Features   []string `json:"features"`
+	QuotaType  string   `json:"quotaType,omitempty"`  // tokens | generic
+	MaxDevices int      `json:"maxDevices,omitempty"` // 0 = unlimited
 }
 
 // OrderRequest 支付请求
@@ -25,8 +27,9 @@ type OrderRequest struct {
 	PayPlan PayPlan `json:"payPlan" binding:"required"`
 	Method  method  `json:"method" binding:"required"`
 
-	Amount *float64 `json:"amount,omitempty"` // 基础版可自定义金额
-	UserId *uint64  `json:"-,omitempty"`
+	Amount     *float64 `json:"amount,omitempty"` // 基础版可自定义金额
+	CouponCode string   `json:"couponCode,omitempty"`
+	UserId     *uint64  `json:"-,omitempty"`
 }
 
 // OrderResponse 支付响应
@@ -47,8 +50,10 @@ type OrderModel struct {
 	OrderID string  `json:"orderId" gorm:"column:order_id;type:varchar(256);uniqueIndex;not null"`
 	ThridID string  `json:"thridId" gorm:"column:thrid_id;type:varchar(256);index"`
 	PayPlan PayPlan `json:"payPlan" gorm:"column:pay_plan;type:varchar(20)"`
-	Amount  float64 `json:"amount" gorm:"column:amount;type:double;not null"`
-	Method  method  `json:"method" gorm:"column:method;type:varchar(20)"`
+	Amount         float64 `json:"amount" gorm:"column:amount;type:double;not null"`
+	DiscountAmount float64 `json:"discountAmount" gorm:"column:discount_amount;type:double;default:0"`
+	CouponCode     string  `json:"couponCode" gorm:"column:coupon_code;type:varchar(64)"`
+	Method         method  `json:"method" gorm:"column:method;type:varchar(20)"`
 	PayURL  string  `json:"payurl" gorm:"column:pay_url;type:text"`
 	QRCode  string  `json:"qrcode" gorm:"column:qrcode;type:text"`
 

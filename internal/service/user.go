@@ -3,10 +3,10 @@ package service
 import (
 	"fmt"
 
-	"llm-member/internal/config"
-	"llm-member/internal/consts"
-	"llm-member/internal/model"
-	"llm-member/internal/support"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/consts"
+	"github.com/OptLTD/member/internal/model"
+	"github.com/OptLTD/member/internal/support"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"

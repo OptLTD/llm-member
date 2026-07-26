@@ -1,13 +1,13 @@
-# fly.toml app configuration file generated for llm-member on 2025-08-23T15:23:18+08:00
+# fly.toml app configuration file generated for member on 2025-08-23T15:23:18+08:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'llm-member'
+app = 'member'
 primary_region = 'hkg'
 
 [build]
-  image = 'docker.io/optltd/llm-member:latest'
+  image = 'docker.io/optltd/member:latest'
 
 [env]
   ADMIN_PASSWORD = 'admin123'

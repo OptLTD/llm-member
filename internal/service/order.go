@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"time"
 
-	"llm-member/internal/config"
-	"llm-member/internal/consts"
-	"llm-member/internal/model"
-	"llm-member/internal/payment"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/consts"
+	"github.com/OptLTD/member/internal/model"
+	"github.com/OptLTD/member/internal/payment"
 
 	"gorm.io/gorm"
 )
@@ -52,10 +52,31 @@ func (s *OrderService) CreateOrder(req *model.OrderRequest, plan *model.PlanInfo
 		return nil, fmt.Errorf("%w %s", consts.ErrPaymentMethodNotEnabled, req.Method)
 	}
 	// 生成订单ID, 创建订单记录
+	amount := plan.Price
+	if req.Amount != nil && *req.Amount > 0 {
+		amount = *req.Amount
+	}
+	discount := 0.0
+	couponCode := ""
+	if config.HasModule(config.ModuleCoupon) && req.CouponCode != "" {
+		couponSvc := NewCouponService()
+		valid, err := couponSvc.Validate(req.CouponCode, *req.UserId, req.PayPlan, amount)
+		if err != nil {
+			return nil, err
+		}
+		if !valid.Valid {
+			return nil, fmt.Errorf("券码无效: %s", valid.Message)
+		}
+		discount = valid.DiscountAmount
+		amount = valid.FinalAmount
+		couponCode = req.CouponCode
+	}
 	order := &model.OrderModel{
 		UserID:  *req.UserId,
-		PayPlan: req.PayPlan, Amount: *req.Amount,
-		Method: req.Method, Status: model.PaymentPending,
+		PayPlan: req.PayPlan, Amount: amount,
+		DiscountAmount: discount,
+		CouponCode:     couponCode,
+		Method:         req.Method, Status: model.PaymentPending,
 		ExpiredAt: time.Now().Add(30 * time.Minute), // 30分钟过期
 	}
 	if orderID, err := s.generateOrderID(); err != nil {
@@ -193,6 +214,20 @@ func (s *OrderService) PaySuccess(orderId string, limit *model.ApiLimit) error {
 	}
 
 	tx.Commit()
+
+	if config.HasModule(config.ModuleCoupon) && order.CouponCode != "" {
+		_ = NewCouponService().Redeem(order.CouponCode, order.UserID, order.OrderID, order.DiscountAmount)
+	}
+	if config.HasModule(config.ModuleReferral) {
+		_ = NewReferralService().OnPaymentSuccess(order.UserID)
+	}
+	if config.HasModule(config.ModuleAnalytics) {
+		_ = NewAnalyticsService().TrackInternal(order.UserID, "order.paid", map[string]any{
+			"orderId": order.OrderID,
+			"plan":    order.PayPlan,
+			"amount":  order.Amount,
+		})
+	}
 	return nil
 }
 

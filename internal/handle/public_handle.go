@@ -3,12 +3,14 @@ package handle
 import (
 	"embed"
 	"html/template"
-	"llm-member/internal/config"
-	"llm-member/internal/model"
-	"llm-member/internal/service"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/model"
+	"github.com/OptLTD/member/internal/service"
 
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
@@ -62,12 +64,14 @@ func (h *PublicHandle) DoPaymentCallback(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "支付成功"})
 }
 
+const uiFrontRoot = "ui-front"
+
 // StaticRouteHandle 统一的路由和静态文件处理中间件
-func StaticRouteHandle(cfg *config.Config, webroot embed.FS) gin.HandlerFunc {
+func StaticRouteHandle(cfg *config.Config, uiFront embed.FS) gin.HandlerFunc {
 	var i18nService = service.NewI18nService()
 	var RenderPage = func(c *gin.Context, name string) {
-		tmplPath := filepath.Join("webroot", name+".html")
-		tmplData, err := webroot.ReadFile(tmplPath)
+		tmplPath := filepath.Join(uiFrontRoot, name+".html")
+		tmplData, err := uiFront.ReadFile(tmplPath)
 		if err != nil {
 			c.String(404, "页面加载失败")
 			return
@@ -109,7 +113,11 @@ func StaticRouteHandle(cfg *config.Config, webroot embed.FS) gin.HandlerFunc {
 		case "/", "/index.html":
 			RenderPage(c, "index")
 		case "/admin", "/admin.html":
-			RenderPage(c, "admin")
+			serveAdminSPA(c, uiFront)
+		case "/feedback", "/feedback.html":
+			serveStaticHTML(c, uiFront, uiFrontRoot+"/feedback.html")
+		case "/survey", "/survey.html":
+			serveStaticHTML(c, uiFront, uiFrontRoot+"/survey.html")
 		case "/reset", "/reset.html":
 			RenderPage(c, "reset")
 		case "/verify", "/verify.html":
@@ -120,6 +128,8 @@ func StaticRouteHandle(cfg *config.Config, webroot embed.FS) gin.HandlerFunc {
 			RenderPage(c, "signup")
 		case "/forget", "/forget.html":
 			RenderPage(c, "forget")
+		case "/auth-callback", "/auth-callback.html":
+			serveStaticHTML(c, uiFront, uiFrontRoot+"/auth-callback.html")
 		case "/payment", "/payment.html":
 			RenderPage(c, "payment")
 		case "/profile", "/profile.html":
@@ -127,10 +137,62 @@ func StaticRouteHandle(cfg *config.Config, webroot embed.FS) gin.HandlerFunc {
 		case "/pricing", "/pricing.html":
 			RenderPage(c, "pricing")
 		default:
+			if strings.HasPrefix(c.Request.URL.Path, "/survey/") {
+				serveStaticHTML(c, uiFront, uiFrontRoot+"/survey.html")
+				return
+			}
+			if strings.HasPrefix(c.Request.URL.Path, "/admin/") {
+				serveAdminSPA(c, uiFront)
+				return
+			}
 			fs, _ := static.EmbedFolder(
-				webroot, "webroot",
+				uiFront, uiFrontRoot,
 			)
 			static.Serve("/", fs)(c)
 		}
+	}
+}
+
+func serveStaticHTML(c *gin.Context, uiFront embed.FS, file string) {
+	data, err := uiFront.ReadFile(file)
+	if err != nil {
+		c.String(http.StatusNotFound, "页面不存在")
+		return
+	}
+	c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+}
+
+func serveAdminSPA(c *gin.Context, uiFront embed.FS) {
+	p := c.Request.URL.Path
+	if strings.HasPrefix(p, "/admin/") && p != "/admin/" {
+		rel := strings.TrimPrefix(p, "/admin/")
+		if rel != "" {
+			data, err := uiFront.ReadFile(path.Join(uiFrontRoot, "admin", "dist", rel))
+			if err == nil {
+				c.Data(http.StatusOK, contentTypeForPath(rel), data)
+				return
+			}
+		}
+	}
+	data, err := uiFront.ReadFile(uiFrontRoot + "/admin/dist/index.html")
+	if err != nil {
+		c.String(http.StatusNotFound, "Admin UI not built. Run: cd ui-admin && npm run build")
+		return
+	}
+	c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+}
+
+func contentTypeForPath(p string) string {
+	switch path.Ext(p) {
+	case ".js":
+		return "application/javascript"
+	case ".css":
+		return "text/css"
+	case ".svg":
+		return "image/svg+xml"
+	case ".png":
+		return "image/png"
+	default:
+		return "application/octet-stream"
 	}
 }

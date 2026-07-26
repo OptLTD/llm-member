@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用户反馈</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50 p-6">
+  <div class="max-w-lg mx-auto bg-white rounded-lg shadow p-6">
+    <h1 class="text-xl font-bold mb-4">用户反馈</h1>
+    <form id="form" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium">类型</label>
+        <select id="type" class="w-full border rounded px-3 py-2">
+          <option value="bug">Bug</option>
+          <option value="feature">功能建议</option>
+          <option value="complaint">投诉</option>
+          <option value="other">其他</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">标题</label>
+        <input id="title" class="w-full border rounded px-3 py-2" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium">内容</label>
+        <textarea id="content" class="w-full border rounded px-3 py-2" rows="4" required></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">评分 (1-5)</label>
+        <input id="rating" type="number" min="1" max="5" class="w-full border rounded px-3 py-2" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium">联系方式（可选）</label>
+        <input id="contact" class="w-full border rounded px-3 py-2" />
+      </div>
+      <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded">提交</button>
+    </form>
+    <p id="msg" class="mt-4 text-sm text-green-600 hidden"></p>
+  </div>
+  <script>
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const token = localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = 'Bearer ' + token;
+      const res = await fetch('/api/feedback', {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          type: document.getElementById('type').value,
+          title: document.getElementById('title').value,
+          content: document.getElementById('content').value,
+          rating: parseInt(document.getElementById('rating').value) || 0,
+          contact: document.getElementById('contact').value,
+        }),
+      });
+      const data = await res.json();
+      const msg = document.getElementById('msg');
+      if (res.ok) {
+        msg.textContent = '提交成功，感谢反馈！';
+        msg.classList.remove('hidden');
+        e.target.reset();
+      } else {
+        msg.textContent = data.error || '提交失败';
+        msg.classList.remove('hidden', 'text-green-600');
+        msg.classList.add('text-red-600');
+      }
+    });
+  </script>
+</body>
+</html>

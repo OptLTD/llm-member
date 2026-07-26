@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"llm-member/internal/consts"
+	"github.com/OptLTD/member/internal/consts"
 )
 
 // RedisConfig Redis配置

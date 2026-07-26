@@ -3,8 +3,8 @@ package service
 import (
 	"gorm.io/gorm"
 
-	"llm-member/internal/config"
-	"llm-member/internal/model"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/model"
 )
 
 type LogService struct {

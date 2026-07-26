@@ -42,21 +42,23 @@
 
 1. **构建镜像**
 ```bash
-docker build -t optltd/llm-member:latest .
+docker build -t optltd/member:latest .
 ```
 
 2. **运行容器**
 ```bash
 docker run -d \
-   --name llm-member-app \
+   --name member-app \
    -p 8080:8080 \
-   -v llm_storage:/app/storage \
+   -v llm_storage:/app/data \
    -e APP_PORT=8080 \
    -e APP_MODE=test \
    -e ADMIN_USERNAME=admin \
    -e ADMIN_PASSWORD=admin123 \
-   -e OPENAI_API_KEY=your_openai_api_key_here \
-   optltd/llm-member:latest
+   -e LLM_API_KEY=your_api_key_here \
+   -e LLM_BASE_URL=https://api.openai.com/v1 \
+   -e LLM_DEFAULT_MODEL=gpt-4o-mini \
+   optltd/member:latest
 ```
 
 ## 配置说明
@@ -71,13 +73,15 @@ docker run -d \
 | APP_MODE | release | app 运行模式 |
 | ADMIN_USERNAME | admin | 管理员用户名 |
 | ADMIN_PASSWORD | admin123 | 管理员密码 |
-| OPENAI_API_KEY | - | OpenAI API 密钥 |
-| CLAUDE_API_KEY | - | Claude API 密钥 |
+| LLM_API_KEY | - | LLM 上游 API 密钥 |
+| LLM_BASE_URL | https://api.openai.com/v1 | OpenAI-compatible Base URL |
+| LLM_PROVIDER | openai | 上游标签（日志用） |
+| LLM_DEFAULT_MODEL | - | 默认模型 |
 
 ### 数据持久化
 
-- 数据库文件: `/app/storage/app.db`
-- 日志文件: `/app/storage/app.log`
+- 数据库文件: `/app/data/app.db`
+- 日志文件: `/app/data/app.log`
 - 使用 Docker Volume `llm_storage` 进行数据持久化
 
 ## 常用命令
@@ -98,7 +102,7 @@ docker-compose restart
 docker-compose logs -f
 
 # 进入容器
-docker-compose exec llm-member sh
+docker-compose exec member sh
 
 # 更新服务
 docker-compose pull
@@ -112,16 +116,16 @@ docker-compose up -d
 docker ps
 
 # 查看日志
-docker logs -f llm-member-app
+docker logs -f member-app
 
 # 进入容器
-docker exec -it llm-member-app sh
+docker exec -it member-app sh
 
 # 停止容器
-docker stop llm-member-app
+docker stop member-app
 
 # 删除容器
-docker rm llm-member-app
+docker rm member-app
 ```
 
 ## 安全建议
@@ -129,7 +133,7 @@ docker rm llm-member-app
 1. **修改默认密码**: 部署前请修改 `ADMIN_PASSWORD` 环境变量
 2. **API 密钥安全**: 不要在代码中硬编码 API 密钥，使用环境变量
 3. **网络安全**: 生产环境建议使用反向代理（如 Nginx）
-4. **数据备份**: 定期备份 `/app/storage` 目录中的数据
+4. **数据备份**: 定期备份 `/app/data` 目录中的数据
 
 ## 故障排除
 
@@ -148,26 +152,26 @@ docker rm llm-member-app
 2. **权限问题**
    ```bash
    # 检查存储目录权限
-   docker-compose exec llm-member ls -la /app/storage
+   docker-compose exec member ls -la /app/data
    ```
 
 3. **健康检查失败**
    ```bash
    # 查看健康检查状态
-   docker inspect llm-member-app | grep Health -A 10
+   docker inspect member-app | grep Health -A 10
    ```
 
 ### 日志查看
 
 ```bash
 # 查看应用日志
-docker-compose logs llm-member
+docker-compose logs member
 
 # 实时查看日志
-docker-compose logs -f llm-member
+docker-compose logs -f member
 
 # 查看最近 100 行日志
-docker-compose logs --tail=100 llm-member
+docker-compose logs --tail=100 member
 ```
 
 ## 生产环境部署

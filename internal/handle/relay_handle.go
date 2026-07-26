@@ -3,8 +3,8 @@ package handle
 import (
 	"context"
 	"encoding/json"
-	"llm-member/internal/model"
-	"llm-member/internal/service"
+	"github.com/OptLTD/member/internal/model"
+	"github.com/OptLTD/member/internal/service"
 	"net/http"
 	"os"
 	"strings"

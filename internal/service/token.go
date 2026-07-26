@@ -2,8 +2,8 @@ package service
 
 import (
 	"fmt"
-	"llm-member/internal/consts"
-	"llm-member/internal/model"
+	"github.com/OptLTD/member/internal/consts"
+	"github.com/OptLTD/member/internal/model"
 	"sync"
 
 	"github.com/tiktoken-go/tokenizer"

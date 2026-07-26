@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
-	"llm-member/internal/config"
-	"llm-member/internal/consts"
-	"llm-member/internal/model"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/consts"
+	"github.com/OptLTD/member/internal/model"
 
 	"github.com/go-pay/gopay"
 	"github.com/go-pay/gopay/alipay"

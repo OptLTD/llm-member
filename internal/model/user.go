@@ -46,6 +46,7 @@ type SignUpRequest struct {
 	Email    string `json:"email" binding:"omitempty,email"`
 	Username string `json:"username" binding:"omitempty"`
 	Password string `json:"password" binding:"required,min=6"`
+	RefCode  string `json:"refCode,omitempty"`
 }
 
 // SignUpResponse 注册响应
@@ -146,6 +147,9 @@ type StatsResponse struct {
 	MonthlySuccessfulRevenue float64 `json:"monthlySuccessfulRevenue"`
 	WeeklyRevenue            float64 `json:"weeklyRevenue"`
 	WeeklySuccessfulRevenue  float64 `json:"weeklySuccessfulRevenue"`
+
+	AnalyticsTodayPV    int64 `json:"analyticsTodayPV,omitempty"`
+	AnalyticsWeekEvents int64 `json:"analyticsWeekEvents,omitempty"`
 }
 
 type ApiUsage struct {

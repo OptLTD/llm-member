@@ -2,9 +2,9 @@ package handle
 
 import (
 	"fmt"
-	"llm-member/internal/config"
-	"llm-member/internal/model"
-	"llm-member/internal/service"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/model"
+	"github.com/OptLTD/member/internal/service"
 	"log"
 	"net/http"
 	"strings"
@@ -45,6 +45,7 @@ func (h *AuthHandle) UserSignUp(c *gin.Context) {
 		Email:    req.Email,
 		Username: req.Email,
 		Password: req.Password,
+		RefCode:  req.RefCode,
 	}
 
 	// 注册用户

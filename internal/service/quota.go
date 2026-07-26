@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"llm-member/internal/config"
-	"llm-member/internal/consts"
-	"llm-member/internal/model"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/consts"
+	"github.com/OptLTD/member/internal/model"
 
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"

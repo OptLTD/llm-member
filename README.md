@@ -1,4 +1,4 @@
-# LLM Member - 支持LLM Proxy的会员管理系统
+# Member - 支持LLM Proxy的会员管理系统
 
 一个专为开发者和企业打造的LLM代理服务平台，提供完整的会员管理体系和灵活的模型接入管理。
 
@@ -71,27 +71,30 @@ fetch('/v1/chat/completions', {
 
 ```bash
 docker run -d \
-   --name llm-member-app \
+   --name member-app \
    -p 8080:8080 \
-   -v llm_storage:/app/storage \
+   -v llm_storage:/app/data \
    -e APP_PORT=8080 \
    -e APP_MODE=test \
    -e ADMIN_USERNAME=admin \
    -e ADMIN_PASSWORD=admin123 \
-   -e DEEPSEEK_API_KEY=sk-you-api-key \
-   optltd/llm-member:latest
+   -e LLM_API_KEY=sk-you-api-key \
+   -e LLM_BASE_URL=https://api.deepseek.com/v1 \
+   -e LLM_PROVIDER=deepseek \
+   -e LLM_DEFAULT_MODEL=deepseek-chat \
+   optltd/member:latest
 ```
 完整配置参考[.env.example](.env.example)
 
 ### 2. 配置您的产品
 
-1. **在您的产品中集成LLM Member认证服务：**
+1. **在您的产品中集成Member认证服务：**
 
-增加登录注册功能，用户可以通过LLM Member认证服务进行注册和登录。
+增加登录注册功能，用户可以通过Member认证服务进行注册和登录。
 Authorization Url: `https://your-domain.com/authorization`
 
 2. **在您的产品中存储用户认证信息：**
-在LLM Member 认证成功后，如果设置了`Callback Url`，认证服务会将用户信息返回给您的产品。您需要在您的产品中存储这些信息，以便后续的API调用。
+在Member 认证成功后，如果设置了`Callback Url`，认证服务会将用户信息返回给您的产品。您需要在您的产品中存储这些信息，以便后续的API调用。
 
 payload:
 ```json
@@ -140,7 +143,7 @@ const resp = fetch(`https://your-domain.com/v1/verify-token`, {
 }
 ```
 
-3. **在您的产品中集成LLM Member服务：**
+3. **在您的产品中集成Member服务：**
 
 3.1 **请求大模型**：
 Base Url：`https://your-domain.com/v1`

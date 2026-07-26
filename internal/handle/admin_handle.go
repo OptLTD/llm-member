@@ -6,9 +6,10 @@ import (
 	"strconv"
 	"time"
 
-	"llm-member/internal/model"
-	"llm-member/internal/service"
-	"llm-member/internal/support"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/model"
+	"github.com/OptLTD/member/internal/service"
+	"github.com/OptLTD/member/internal/support"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -161,6 +162,16 @@ func (h *AdminHandle) Current(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"user": user})
 }
 
+// IssueMyAPIKey 为当前管理员重新签发 API Key（明文仅返回一次；库内只存 hash）
+func (h *AdminHandle) IssueMyAPIKey(c *gin.Context) {
+	user, err := h.userService.RegenerateKey(c.GetUint64("UserID"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"apiKey": user.APIKey})
+}
+
 // GetModels 获取可用模型
 func (h *AdminHandle) GetModels(c *gin.Context) {
 	models := h.relayService.GetModels()
@@ -269,4 +280,44 @@ func (h *AdminHandle) GetUsage(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, response.AllUsage)
+}
+
+func (h *AdminHandle) GetModules(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"modules":   config.EnabledModules(),
+		"available": config.AllModules(),
+	})
+}
+
+func (h *AdminHandle) GetSystemInfo(c *gin.Context) {
+	cfg := config.AppConfig()
+	info := gin.H{
+		"modules":   config.EnabledModules(),
+		"available": config.AllModules(),
+	}
+	if cfg != nil {
+		info["appName"] = cfg.AppName
+		info["appMode"] = cfg.AppMode
+		info["dbDriver"] = cfg.DBDriver
+		info["version"] = cfg.Version
+	}
+	c.JSON(http.StatusOK, info)
+}
+
+func (h *AdminHandle) UpdateModules(c *gin.Context) {
+	var req struct {
+		Modules []string `json:"modules"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.setupService.SaveModules(req.Modules); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save modules"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"modules":   config.EnabledModules(),
+		"available": config.AllModules(),
+	})
 }

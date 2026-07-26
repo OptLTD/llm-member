@@ -13,9 +13,9 @@ import (
 	"os"
 	"time"
 
-	"llm-member/internal/config"
-	"llm-member/internal/consts"
-	"llm-member/internal/model"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/consts"
+	"github.com/OptLTD/member/internal/model"
 )
 
 // CreemPayment Creem支付实现
@@ -455,7 +455,7 @@ func (c *CreemPayment) makeAPIRequest(method, endpoint string, data any) ([]byte
 	// 设置请求头 - Creem使用x-api-key认证
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", c.config.ApiKey) // 使用x-api-key认证
-	req.Header.Set("User-Agent", "LLM-Member/1.0")
+	req.Header.Set("User-Agent", "Member/1.0")
 
 	log.Printf("[creem] API request: %s %s", method, url)
 

@@ -1,4 +1,4 @@
-module llm-member
+module github.com/OptLTD/member
 
 go 1.24
 
@@ -9,6 +9,7 @@ require (
 	github.com/gin-gonic/gin v1.10.1
 	github.com/go-pay/gopay v1.5.114
 	github.com/google/uuid v1.6.0
+	github.com/intmian/gorm-d1-adapter v0.0.0-20260711091525-69f3943ef576
 	github.com/joho/godotenv v1.5.1
 	github.com/nicksnyder/go-i18n/v2 v2.6.0
 	github.com/redis/go-redis/v9 v9.12.1

@@ -4,19 +4,15 @@ import (
 	"fmt"
 	"time"
 
-	"llm-member/internal/config"
-	"llm-member/internal/model"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/model"
 
 	"gorm.io/gorm"
 )
 
 // jsonIntExpr 按数据库方言从 JSON 文本字段提取整数值
 func jsonIntExpr(db *gorm.DB, column, key string) string {
-	if db.Dialector.Name() == "postgres" {
-		return fmt.Sprintf("(%s::json->>'%s')::bigint", column, key)
-	}
-	// SQLite / 其他：JSON_EXTRACT
-	return fmt.Sprintf("CAST(JSON_EXTRACT(%s, '$.%s') AS INTEGER)", column, key)
+	return config.JSONIntExpr(db, column, key)
 }
 
 type StatsService struct {
@@ -46,6 +42,17 @@ func (s *StatsService) GetStats() (*model.StatsResponse, error) {
 	// 订单统计
 	if err := s.getOrderStats(stats); err != nil {
 		return nil, err
+	}
+
+	if config.HasModule(config.ModuleAnalytics) {
+		if overview, err := NewAnalyticsService().Overview(0); err == nil {
+			if v, ok := overview["todayPV"].(int64); ok {
+				stats.AnalyticsTodayPV = v
+			}
+			if v, ok := overview["weekEvents"].(int64); ok {
+				stats.AnalyticsWeekEvents = v
+			}
+		}
 	}
 
 	return stats, nil

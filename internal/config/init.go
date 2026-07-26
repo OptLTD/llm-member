@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -19,8 +20,12 @@ type Config struct {
 	AppMode string
 	Storage string
 
+	DBDriver string
+	Modules  string
+
 	Admin    *AdminInfo
 	Postgres *PostgresConfig
+	D1       *D1Config
 	Redis    *RedisConfig
 }
 
@@ -36,8 +41,11 @@ func Load() *Config {
 		AppName: getEnv("APP_NAME", "Demo"),
 		AppDesc: getEnv("APP_DESC", "Desc"),
 		AppHost: getEnv("APP_HOST", "localhost"),
-		Storage: getEnv("DATA_PATH", "./storage"),
-		Version: getEnv("APP_VERSION", "v1.0.0"),
+		Storage:  getEnv("DATA_PATH", "./data"),
+		Version:  getEnv("APP_VERSION", "v1.0.0"),
+		DBDriver: getEnv("DB_DRIVER", "sqlite"),
+		Modules: getEnv("APP_MODULES",
+			"member,device,analytics,coupon,referral,survey,feedback,llm-relay"),
 
 		// PostgreSQL配置
 		Postgres: &PostgresConfig{
@@ -69,6 +77,14 @@ func Load() *Config {
 	if dsn := getEnv("DATABASE_URL", ""); dsn != "" {
 		cfg.Postgres = &PostgresConfig{DSN: dsn}
 	}
+	cfg.D1 = &D1Config{
+		AccountID:  getEnv("D1_ACCOUNT_ID", ""),
+		DatabaseID: getEnv("D1_DATABASE_ID", ""),
+		APIToken:   getEnv("D1_API_TOKEN", ""),
+		ProxyURL:   getEnv("D1_PROXY_ENDPOINT", ""),
+		ProxyToken: getEnv("D1_PROXY_TOKEN", ""),
+	}
+	setGlobalConfig(cfg)
 	return cfg
 }
 
@@ -77,10 +93,16 @@ var globalDB *gorm.DB
 func InitDB(cfg *Config) error {
 	var db *gorm.DB
 	var err error
-	// 检查是否配置了 PostgreSQL
-	if cfg.Postgres.Pass != "" || cfg.Postgres.DSN != "" {
-		db, err = GetPostgresDB(cfg.Postgres)
-	} else {
+	switch cfg.DBDriver {
+	case "postgres":
+		if cfg.Postgres.Pass != "" || cfg.Postgres.DSN != "" {
+			db, err = GetPostgresDB(cfg.Postgres)
+		} else {
+			return fmt.Errorf("DB_DRIVER=postgres but PostgreSQL is not configured")
+		}
+	case "d1":
+		db, err = GetD1DB(cfg)
+	default:
 		db, err = GetSQLiteDB(cfg)
 	}
 	if err != nil {

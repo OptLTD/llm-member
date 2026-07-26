@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"llm-member/internal/model"
+	"github.com/OptLTD/member/internal/model"
 	"log"
 	"strings"
 	"sync"

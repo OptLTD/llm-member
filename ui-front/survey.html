@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>问卷调查</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50 p-6">
+  <div class="max-w-lg mx-auto bg-white rounded-lg shadow p-6">
+    <h1 id="title" class="text-xl font-bold mb-2">问卷</h1>
+    <p id="desc" class="text-gray-600 mb-4"></p>
+    <form id="form" class="space-y-4"></form>
+    <button id="submit" class="mt-4 w-full bg-blue-600 text-white py-2 rounded hidden">提交</button>
+    <p id="msg" class="mt-4 text-sm hidden"></p>
+  </div>
+  <script>
+    const surveyId = location.pathname.split('/').pop().replace('.html','') || new URLSearchParams(location.search).get('id');
+    async function load() {
+      const res = await fetch('/api/survey/' + surveyId);
+      const data = await res.json();
+      if (!res.ok) { document.getElementById('msg').textContent = data.error; document.getElementById('msg').classList.remove('hidden'); return; }
+      document.getElementById('title').textContent = data.survey.title;
+      document.getElementById('desc').textContent = data.survey.description || '';
+      const form = document.getElementById('form');
+      (data.questions || []).forEach(q => {
+        const wrap = document.createElement('div');
+        wrap.innerHTML = `<label class="block font-medium mb-1">${q.title}</label>`;
+        if (q.type === 'text') {
+          wrap.innerHTML += `<textarea name="q_${q.id}" class="w-full border rounded px-3 py-2" rows="3"></textarea>`;
+        } else if (q.type === 'rating') {
+          wrap.innerHTML += `<input name="q_${q.id}" type="number" min="1" max="5" class="w-full border rounded px-3 py-2" />`;
+        } else {
+          const sel = document.createElement('select');
+          sel.name = 'q_' + q.id;
+          sel.className = 'w-full border rounded px-3 py-2';
+          (q.options || []).forEach(opt => { const o = document.createElement('option'); o.value = opt; o.textContent = opt; sel.appendChild(o); });
+          wrap.appendChild(sel);
+        }
+        form.appendChild(wrap);
+      });
+      document.getElementById('submit').classList.remove('hidden');
+    }
+    document.getElementById('submit').addEventListener('click', async () => {
+      const answers = {};
+      new FormData(document.getElementById('form')).forEach((v, k) => { answers[k] = v; });
+      const token = localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = 'Bearer ' + token;
+      const res = await fetch('/api/survey/' + surveyId + '/submit', { method: 'POST', headers, body: JSON.stringify({ answers }) });
+      const msg = document.getElementById('msg');
+      msg.classList.remove('hidden');
+      msg.textContent = res.ok ? '提交成功' : (await res.json()).error;
+    });
+    if (surveyId) load();
+  </script>
+</body>
+</html>

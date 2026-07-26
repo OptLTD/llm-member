@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"llm-member/internal/model"
-	"llm-member/internal/service"
+	"github.com/OptLTD/member/internal/model"
+	"github.com/OptLTD/member/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,6 +35,10 @@ func (h *SetupHandler) SetPricingPlan(c *gin.Context) {
 	if err := c.ShouldBindJSON(&plan); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+	plan.Plan = planKey
+	if plan.Features == nil {
+		plan.Features = []string{}
 	}
 
 	if _, err := h.setupService.ParsePlanLimit(&plan); err != nil {

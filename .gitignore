@@ -1,6 +1,9 @@
 .env
-data
-storage
-llm-member
+/bin
+/data
+/member
+/storage
 __debug*
 __pycache__
+ui-admin/node_modules
+ui-admin/dist

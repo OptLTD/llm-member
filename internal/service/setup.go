@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"llm-member/internal/config"
-	"llm-member/internal/consts"
-	"llm-member/internal/model"
-	"llm-member/internal/support"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/consts"
+	"github.com/OptLTD/member/internal/model"
+	"github.com/OptLTD/member/internal/support"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -41,11 +41,18 @@ func HandleInit() error {
 		return fmt.Errorf("%w: %v", consts.ErrInitDefaultConfigsFailed, err)
 	}
 
+	if err := s.loadModulesConfig(); err != nil {
+		return fmt.Errorf("failed to load modules config: %v", err)
+	}
+
 	if err := s.createDefaultAdmin(); err != nil {
 		return fmt.Errorf("%w: %v", consts.ErrCreateDefaultAdminFailed, err)
 	}
 	if err := config.InitRedis(s.cfg.Redis); err != nil {
 		log.Println("Failed to initialize redis:", err)
+	}
+	if err := EnsureDefaultSite(); err != nil {
+		log.Println("Failed to initialize default analytics site:", err)
 	}
 	return nil
 }
@@ -234,36 +241,86 @@ func (s *SetupService) ParsePlanLimit(plan *model.PlanInfo) (*model.ApiLimit, er
 	return limit, nil
 }
 func (s *SetupService) autoMigration() error {
-	// 自动迁移数据库表
-	err := s.db.AutoMigrate(
+	models := []any{
 		&model.UserModel{},
 		&model.VerifyModel{},
+		&model.SessionModel{},
 		&model.OrderModel{},
 		&model.LlmLogModel{},
 		&model.ConfigModel{},
-	)
-	return err
+	}
+	if config.HasModule(config.ModuleDevice) {
+		models = append(models, &model.DeviceModel{})
+	}
+	if config.HasModule(config.ModuleAnalytics) {
+		models = append(models, &model.SiteModel{}, &model.EventModel{}, &model.EventDailyModel{})
+	}
+	if config.HasModule(config.ModuleCoupon) {
+		models = append(models, &model.CouponModel{}, &model.CouponUsageModel{})
+	}
+	if config.HasModule(config.ModuleReferral) {
+		models = append(models,
+			&model.ReferralCodeModel{},
+			&model.ReferralModel{},
+			&model.CampaignModel{},
+			&model.ShareLogModel{},
+		)
+	}
+	if config.HasModule(config.ModuleSurvey) {
+		models = append(models,
+			&model.SurveyModel{},
+			&model.SurveyQuestionModel{},
+			&model.SurveyResponseModel{},
+		)
+	}
+	if config.HasModule(config.ModuleFeedback) {
+		models = append(models, &model.FeedbackModel{})
+	}
+	return s.db.AutoMigrate(models...)
 }
 
 // createDefaultAdmin 创建默认管理员用户
 func (s *SetupService) createDefaultAdmin() error {
-	var count int64
-	if s.db.Model(&model.UserModel{}).
-		Where("user_role = ?", "admin").
-		Count(&count); count > 0 {
-		return nil // 已存在管理员，跳过创建
+	username := strings.TrimSpace(s.cfg.Admin.Username)
+	password := s.cfg.Admin.Password
+	if username == "" || password == "" {
+		log.Println("[SETUP] ADMIN_USERNAME / ADMIN_PASSWORD 未配置，跳过创建默认管理员")
+		return nil
+	}
+
+	var admin model.UserModel
+	err := s.db.Where("user_role = ?", model.RoleAdmin).First(&admin).Error
+	if err == nil {
+		// 修复早期版本在 env 未就绪时创建的空账号
+		if strings.TrimSpace(admin.Username) == "" {
+			hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+			if err != nil {
+				return fmt.Errorf("%w: %v", consts.ErrPasswordEncryptionFailed, err)
+			}
+			admin.Username = username
+			admin.Email = username
+			admin.Password = string(hashed)
+			if err := s.db.Save(&admin).Error; err != nil {
+				return fmt.Errorf("%w: %v", consts.ErrCreateAdminUserFailed, err)
+			}
+			log.Printf("[SETUP] Repaired default admin account: %s", username)
+		}
+		return nil
+	}
+	if err != gorm.ErrRecordNotFound {
+		return err
 	}
 
 	// 创建默认管理员
 	expire_at := time.Now().AddDate(99, 0, 0)
-	admin := model.UserModel{
-		IsActive: true, Email: s.cfg.Admin.Username,
-		Verified: true, Username: s.cfg.Admin.Username,
+	admin = model.UserModel{
+		IsActive: true, Email: username,
+		Verified: true, Username: username,
 		UserRole: model.RoleAdmin, ExpireAt: &expire_at,
 	}
 
 	// 生成密码哈希
-	pass, cost := []byte(s.cfg.Admin.Password), bcrypt.DefaultCost
+	pass, cost := []byte(password), bcrypt.DefaultCost
 	if data, err := bcrypt.GenerateFromPassword(pass, cost); err != nil {
 		return fmt.Errorf("%w: %v", consts.ErrPasswordEncryptionFailed, err)
 	} else {
@@ -321,6 +378,7 @@ func (s *SetupService) GetDefaultPlan() []model.PlanInfo {
 			Plan: "basic", Name: "体验版",
 			Period: "1d", Usage: "1k tokens",
 			Brief: "适合个人用户和小型项目",
+			MaxDevices: 1, QuotaType: "tokens",
 			Features: []string{
 				"100万 tokens/月",
 				"基础模型访问",
@@ -332,6 +390,7 @@ func (s *SetupService) GetDefaultPlan() []model.PlanInfo {
 			Plan: "extra", Name: "增强版",
 			Period: "1m", Usage: "10k tokens",
 			Price: 99, Brief: "适合中小企业和开发团队",
+			MaxDevices: 2, QuotaType: "tokens",
 			Features: []string{
 				"500万 tokens/月",
 				"所有模型访问",
@@ -344,6 +403,7 @@ func (s *SetupService) GetDefaultPlan() []model.PlanInfo {
 			Plan: "ultra", Name: "专业版",
 			Period: "1m", Usage: "50k tokens",
 			Price: 299, Brief: "适合大型企业和高频使用",
+			MaxDevices: 3, QuotaType: "tokens",
 			Features: []string{
 				"2000万 tokens/月",
 				"所有模型访问",
@@ -356,6 +416,7 @@ func (s *SetupService) GetDefaultPlan() []model.PlanInfo {
 			Plan: "super", Name: "旗舰版",
 			Period: "1m", Usage: "100m tokens",
 			Price: 1999, Brief: "适合超大型企业和极高频使用",
+			MaxDevices: 0, QuotaType: "tokens",
 			Features: []string{
 				"无限 tokens",
 				"所有模型访问",
@@ -367,6 +428,43 @@ func (s *SetupService) GetDefaultPlan() []model.PlanInfo {
 		},
 	}
 	return planInfo
+}
+
+// loadModulesConfig 从 DB 加载模块开关；不存在则用 APP_MODULES / 默认值写入
+func (s *SetupService) loadModulesConfig() error {
+	var row model.ConfigModel
+	err := s.db.Where("`key` = ?", config.ConfigKeyModules).First(&row).Error
+	if err == gorm.ErrRecordNotFound {
+		seed := ""
+		if config.AppConfig() != nil {
+			seed = config.AppConfig().Modules
+		}
+		if seed == "" {
+			seed = strings.Join(config.AllModules(), ",")
+		}
+		config.SetModulesCSV(seed)
+		row = model.ConfigModel{
+			Key:  config.ConfigKeyModules,
+			Kind: "app",
+			Data: config.ModulesJSON(),
+		}
+		return s.db.Create(&row).Error
+	}
+	if err != nil {
+		return err
+	}
+	config.SetModulesCSV(row.Data)
+	return nil
+}
+
+// SaveModules 保存模块开关到 DB 并热更新内存
+func (s *SetupService) SaveModules(names []string) error {
+	config.SetModulesList(names)
+	return s.SetConfig(&model.ConfigModel{
+		Key:  config.ConfigKeyModules,
+		Kind: "app",
+		Data: config.ModulesJSON(),
+	})
 }
 
 // initDefaultConfigs 初始化默认配置

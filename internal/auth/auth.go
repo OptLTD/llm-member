@@ -4,7 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"llm-member/internal/service"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -12,6 +13,32 @@ import (
 func NoneMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
+	}
+}
+
+// RequireModule 模块未启用时返回 404
+func RequireModule(name string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !config.HasModule(name) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "module disabled"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+// RequireAnyModule 任一模块启用即可
+func RequireAnyModule(names ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		for _, name := range names {
+			if config.HasModule(name) {
+				c.Next()
+				return
+			}
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": "module disabled"})
+		c.Abort()
 	}
 }
 

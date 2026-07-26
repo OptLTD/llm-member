@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"llm-member/internal/config"
-	"llm-member/internal/consts"
-	"llm-member/internal/model"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/consts"
+	"github.com/OptLTD/member/internal/model"
 )
 
 // StripePayment Stripe支付实现
@@ -245,7 +245,7 @@ func (s *StripePayment) getLineItems(order *model.OrderModel) []StripeCreateLine
 		Currency: "usd", UnitAmount: int64(order.Amount) * 100,
 		ProductData: StripeProductData{
 			Name: plan_name, Description: fmt.Sprintf(
-				"LLM Member %s - Order %s", plan_name, order.OrderID,
+				"Member %s - Order %s", plan_name, order.OrderID,
 			),
 		},
 	}
@@ -265,7 +265,7 @@ func (s *StripePayment) Create(order *model.OrderModel) error {
 	// 	Currency: "usd", UnitAmount: int64(order.Amount) * 100,
 	// 	ProductData: StripeProductData{
 	// 		Name: planName, Description: fmt.Sprintf(
-	// 			"LLM Member %s - Order %s", planName, order.OrderID,
+	// 			"Member %s - Order %s", planName, order.OrderID,
 	// 		),
 	// 	},
 	// }
@@ -882,7 +882,7 @@ func (s *StripePayment) makeAPIRequest(method, endpoint string, data any) ([]byt
 	// 设置请求头 - Stripe使用Bearer认证和form-urlencoded格式
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Authorization", "Bearer "+s.config.SecretKey)
-	req.Header.Set("User-Agent", "LLM-Member/1.0")
+	req.Header.Set("User-Agent", "Member/1.0")
 	log.Printf("[stripe] API request: %s %s", method, apiURL)
 
 	// 发送请求

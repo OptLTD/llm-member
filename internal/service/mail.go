@@ -5,9 +5,9 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	"llm-member/internal/config"
-	"llm-member/internal/consts"
-	"llm-member/internal/model"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/consts"
+	"github.com/OptLTD/member/internal/model"
 	"log"
 	"net"
 	"net/smtp"
@@ -170,10 +170,14 @@ func (self *MailService) Text(receiver []string, title string, body string) []by
 func (self *MailService) GetTemplate(path string, data map[string]any) (*bytes.Buffer, error) {
 	body := new(bytes.Buffer)
 
-	// 处理相对路径，如果以../开头，则从storage目录读取
+	// 处理相对路径，如果以../开头，则从 DATA_PATH 目录读取
 	var filePath string
 	if strings.HasPrefix(path, "../") {
-		filePath = filepath.Join("storage", strings.TrimPrefix(path, "../")+".html")
+		base := "./data"
+		if cfg := config.AppConfig(); cfg != nil && cfg.Storage != "" {
+			base = cfg.Storage
+		}
+		filePath = filepath.Join(base, strings.TrimPrefix(path, "../")+".html")
 	} else {
 		filePath = filepath.Join("template", path+".html")
 	}

@@ -1,38 +1,26 @@
 package service
 
 import (
-	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
-	"llm-member/internal/config"
-	"llm-member/internal/consts"
-	"llm-member/internal/model"
-	"llm-member/internal/support"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/consts"
+	"github.com/OptLTD/member/internal/model"
+	"github.com/OptLTD/member/internal/support"
 
-	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
-// 删除全局变量
-// var tokens map[string]*TokenInfo
-
 type AuthService struct {
 	conn  *gorm.DB
-	redis *redis.Client
 	userS *UserService
-
-	// 将tokens移动到结构体内部
-	mutex sync.RWMutex
-	token map[string]*TokenInfo
 }
 
 type TokenInfo struct {
@@ -44,95 +32,86 @@ type TokenInfo struct {
 func NewAuthService() *AuthService {
 	service := &AuthService{
 		conn:  config.GetDB(),
-		redis: config.GetRedis(),
 		userS: NewUserService(),
-		token: make(map[string]*TokenInfo), // 初始化tokens
 	}
 
-	// 启动定期清理过期 token 的协程
 	go service.cleanupExpiredTokens()
 	return service
 }
 
+func (s *AuthService) sessionToTokenInfo(session *model.SessionModel) *TokenInfo {
+	return &TokenInfo{
+		UserID:  session.UserID,
+		Expiry:  session.ExpireAt,
+		IsAdmin: session.IsAdmin,
+	}
+}
+
 // SignIn 用户登录
-// SignIn 方法中的token存储部分
 func (s *AuthService) SignIn(username, password string) (string, *model.UserModel, error) {
-	// 获取用户信息
 	user, err := s.userS.GetUserByUsername(username)
 	if err != nil {
 		return "", nil, consts.ErrInvalidCredentials
 	}
 
-	// 检查用户是否激活
 	if !user.IsActive {
 		return "", nil, consts.ErrUserAccountDisabled
 	}
 
-	// 检查用户是否激活
 	if !user.Verified {
 		return "", nil, consts.ErrUserAccountNotVerified
 	}
 
-	// 验证密码
 	if !s.userS.ValidatePassword(user.Password, password) {
 		return "", nil, fmt.Errorf("用户名或密码错误")
 	}
 
-	// 生成 token
 	token, err := s.generateToken()
 	if err != nil {
 		return "", nil, err
 	}
 
-	// 存储 token 信息
 	tokenInfo := &TokenInfo{
 		UserID:  user.ID,
 		IsAdmin: user.UserRole == model.RoleAdmin,
 		Expiry:  time.Now().Add(24 * time.Hour),
 	}
 
-	err = s.SetToken(token, tokenInfo)
-	if err != nil {
+	if err = s.SetToken(token, tokenInfo); err != nil {
 		return "", nil, fmt.Errorf("%w: %v", consts.ErrTokenStorageFailed, err)
 	}
 
-	// 清除密码字段
 	user.Password = ""
 	return token, user, nil
 }
 
-// SignOut 方法
+// SignOut 用户登出
 func (s *AuthService) SignOut(token string) {
 	s.DeleteToken(token)
 }
 
 // SignUp 用户注册
 func (s *AuthService) SignUp(req *model.SignUpRequest) (*model.UserModel, error) {
-	// 检查用户名是否已存在
 	existingUser, err := s.userS.GetUserByUsername(req.Username)
 	if err == nil && existingUser != nil {
 		return nil, consts.ErrUsernameAlreadyExists
 	}
 
-	// 检查邮箱是否已存在
 	existingUser, err = s.userS.GetUserByEmail(req.Email)
 	if err == nil && existingUser != nil {
 		return nil, consts.ErrEmailAlreadyExists
 	}
 
-	// 生成密码哈希
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", consts.ErrPasswordEncryptionFailed, err)
 	}
 
-	// 生成 API Key（明文仅返回一次，入库存 hash）
 	apiKey, err := support.GenerateAPIKey()
 	if err != nil {
 		return nil, fmt.Errorf("API Key 生成失败: %v", err)
 	}
 
-	// 默认配额：优先套餐，否则保守默认
 	setup := NewSetupService()
 	limit, err := setup.GetPlanLimit(model.PlanBasic)
 	if err != nil || limit == nil {
@@ -140,7 +119,6 @@ func (s *AuthService) SignUp(req *model.SignUpRequest) (*model.UserModel, error)
 	}
 
 	today := time.Now().Format("2006-01-02")
-	// 创建新用户
 	user := &model.UserModel{
 		Email: req.Email, Username: req.Username,
 		APIKey: support.HashAPIKey(apiKey), Password: string(hashedPassword),
@@ -151,7 +129,14 @@ func (s *AuthService) SignUp(req *model.SignUpRequest) (*model.UserModel, error)
 	if err := s.userS.CreateUser(user); err != nil {
 		return nil, fmt.Errorf("%w: %v", consts.ErrUserCreationFailed, err)
 	}
-	// 响应中返回明文 key
+	if config.HasModule(config.ModuleReferral) && req.RefCode != "" {
+		_ = NewReferralService().BindReferral(user.ID, req.RefCode)
+	}
+	if config.HasModule(config.ModuleAnalytics) {
+		_ = NewAnalyticsService().TrackInternal(user.ID, "user.register", map[string]any{
+			"refCode": req.RefCode,
+		})
+	}
 	user.APIKey = apiKey
 	return user, nil
 }
@@ -160,11 +145,10 @@ func (s *AuthService) DeleteSignup(user *model.UserModel) error {
 	return s.userS.DeleteUser(user.ID)
 }
 
-// VerifyEmail verifies a user's email address.
+// VerifySignupCode 验证注册邮箱
 func (s *AuthService) VerifySignupCode(code string) error {
 	var reset model.VerifyModel
-	var query = s.conn.Where("token = ?", code)
-	if err := query.First(&reset).Error; err != nil {
+	if err := s.conn.Where("token = ?", code).First(&reset).Error; err != nil {
 		return consts.ErrInvalidVerificationCode
 	}
 	if reset.ExpireAt.Before(time.Now()) {
@@ -187,19 +171,20 @@ func (s *AuthService) VerifySignupCode(code string) error {
 
 func (s *AuthService) GenerateSignupCode(email string) (*model.VerifyModel, error) {
 	reset := &model.VerifyModel{Email: email}
-	if token, err := s.generateToken(); err != nil {
+	token, err := s.generateToken()
+	if err != nil {
 		return nil, fmt.Errorf("%w: %v", consts.ErrVerificationCodeGenerationFailed, err)
-	} else {
-		reset.Token = token
-		reset.ExpireAt = time.Now().Add(10 * time.Minute)
 	}
+	reset.Token = token
+	reset.ExpireAt = time.Now().Add(10 * time.Minute)
+
 	if res := s.conn.Create(reset); res.Error != nil {
 		return nil, fmt.Errorf("验证码生成失败: %v", res.Error)
 	}
 	return reset, nil
 }
 
-// ValidateToken 验证 token
+// ValidateSigninToken 验证登录 token
 func (s *AuthService) ValidateSigninToken(token string) (*TokenInfo, bool) {
 	return s.GetToken(token)
 }
@@ -238,7 +223,6 @@ func (s *AuthService) GetUserFromSigninToken(token string) (*model.UserModel, er
 	return user, nil
 }
 
-// generateToken 生成随机 token
 func (s *AuthService) generateToken() (string, error) {
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
@@ -247,32 +231,27 @@ func (s *AuthService) generateToken() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-// ForgotPassword 忘记密码 - 生成重置token并发送邮件
+// ForgotPassword 忘记密码
 func (s *AuthService) ForgotPassword(email string) (*model.VerifyModel, error) {
-	// 检查用户是否存在
 	user, err := s.userS.GetUserByEmail(email)
 	if err != nil {
 		return nil, consts.ErrEmailNotRegistered
 	}
 
-	// 检查用户是否激活
 	if !user.IsActive {
 		return nil, fmt.Errorf("用户账户已被禁用")
 	}
 
-	// 生成重置token
 	reset := &model.VerifyModel{Email: email}
-	if token, err := s.generateToken(); err != nil {
+	token, err := s.generateToken()
+	if err != nil {
 		return nil, fmt.Errorf("%w: %v", consts.ErrResetCodeGenerationFailed, err)
-	} else {
-		reset.Token = token
-		reset.ExpireAt = time.Now().Add(30 * time.Minute) // 30分钟有效期
 	}
+	reset.Token = token
+	reset.ExpireAt = time.Now().Add(30 * time.Minute)
 
-	// 删除该邮箱之前的重置记录
 	s.conn.Where("email = ?", email).Delete(&model.VerifyModel{})
 
-	// 保存新的重置记录
 	if res := s.conn.Create(reset); res.Error != nil {
 		return nil, fmt.Errorf("重置码生成失败: %v", res.Error)
 	}
@@ -296,173 +275,96 @@ func (s *AuthService) VerifyResetCode(code string) (*model.VerifyModel, error) {
 
 // ResetPassword 重置密码
 func (s *AuthService) ResetPassword(code, newPassword string) error {
-	// 验证重置码
 	reset, err := s.VerifyResetCode(code)
 	if err != nil {
 		return err
 	}
 
-	// 获取用户
 	user, err := s.userS.GetUserByEmail(reset.Email)
 	if err != nil {
 		return fmt.Errorf("用户不存在")
 	}
 
-	// 生成新密码哈希
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("%w: %v", consts.ErrPasswordEncryptionFailed, err)
 	}
 
-	// 更新用户密码
 	user.Password = string(hashedPassword)
 	if err := s.conn.Save(user).Error; err != nil {
 		return fmt.Errorf("%w: %v", consts.ErrPasswordUpdateFailed, err)
 	}
 
-	// 删除已使用的重置记录
 	s.conn.Delete(reset)
-
-	// 清除该用户的所有登录token（强制重新登录）
-	s.mutex.Lock()
-	for token, tokenInfo := range s.token {
-		if tokenInfo.UserID == user.ID {
-			delete(s.token, token)
-		}
-	}
-	s.mutex.Unlock()
+	s.deleteSessionsByUserID(user.ID)
 	return nil
 }
 
-// cleanupExpiredTokens 定期清理过期的 token
+func (s *AuthService) deleteSessionsByUserID(userID uint64) {
+	s.conn.Where("user_id = ?", userID).Delete(&model.SessionModel{})
+}
+
 func (s *AuthService) cleanupExpiredTokens() {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		s.mutex.Lock()
-		now := time.Now()
-		for token, tokenInfo := range s.token {
-			if now.After(tokenInfo.Expiry) {
-				delete(s.token, token)
-			}
-		}
-		s.mutex.Unlock()
+		s.conn.Where("expire_at < ?", time.Now()).Delete(&model.SessionModel{})
 	}
 }
 
-// SetToken 写入token信息
+// SetToken 写入 session 到数据库
 func (s *AuthService) SetToken(token string, tokenInfo *TokenInfo) error {
-	if s.redis == nil {
-		// 使用内存存储
-		s.mutex.Lock()
-		s.token[token] = tokenInfo
-		s.mutex.Unlock()
-		return nil
-	}
-
-	// 使用Redis存储
-	ctx := context.Background()
-	tokenData, err := json.Marshal(tokenInfo)
-	if err != nil {
-		return fmt.Errorf("%w: %v", consts.ErrTokenSerializationFailed, err)
-	}
-
-	// 计算过期时间
-	expiration := time.Until(tokenInfo.Expiry)
-	if expiration <= 0 {
+	if time.Now().After(tokenInfo.Expiry) {
 		return consts.ErrTokenExpired
 	}
 
-	err = s.redis.Set(ctx, "token:"+token, tokenData, expiration).Err()
-	if err != nil {
-		return fmt.Errorf("%w: %v", consts.ErrRedisTokenStorageFailed, err)
+	session := &model.SessionModel{
+		Token:    token,
+		UserID:   tokenInfo.UserID,
+		IsAdmin:  tokenInfo.IsAdmin,
+		ExpireAt: tokenInfo.Expiry,
+	}
+	if err := s.conn.Create(session).Error; err != nil {
+		return fmt.Errorf("%w: %v", consts.ErrTokenStorageFailed, err)
 	}
 	return nil
 }
 
-// GetToken 读取token信息
+// GetToken 从数据库读取 session
 func (s *AuthService) GetToken(token string) (*TokenInfo, bool) {
-	if s.redis == nil {
-
-		// 从内存读取
-		s.mutex.RLock()
-		info, exists := s.token[token]
-		s.mutex.RUnlock()
-
-		if !exists {
-			return nil, false
-		}
-
-		// 检查是否过期
-		if time.Now().After(info.Expiry) {
-			s.mutex.Lock()
-			delete(s.token, token)
-			s.mutex.Unlock()
-			return nil, false
-		}
-
-		return info, true
-	}
-
-	// 从Redis读取
-	ctx := context.Background()
-	tokenData, err := s.redis.Get(ctx, "token:"+token).Result()
-	if err != nil {
-		if err == redis.Nil {
-			return nil, false // token不存在
-		}
-		// Redis错误，降级到内存存储
-		s.mutex.RLock()
-		info, exists := s.token[token]
-		s.mutex.RUnlock()
-		return info, exists
-	}
-
-	var tokenInfo TokenInfo
-	err = json.Unmarshal([]byte(tokenData), &tokenInfo)
-	if err != nil {
+	var session model.SessionModel
+	if err := s.conn.Where("token = ?", token).First(&session).Error; err != nil {
 		return nil, false
 	}
 
-	// 检查是否过期
-	if time.Now().After(tokenInfo.Expiry) {
-		// 删除过期token
-		s.redis.Del(ctx, "token:"+token)
+	if time.Now().After(session.ExpireAt) {
+		s.conn.Delete(&session)
 		return nil, false
 	}
-	return &tokenInfo, true
+
+	return s.sessionToTokenInfo(&session), true
 }
 
-// DeleteToken 删除token
+// DeleteToken 删除 session
 func (s *AuthService) DeleteToken(token string) {
-	if s.redis != nil {
-		// 从Redis删除
-		ctx := context.Background()
-		s.redis.Del(ctx, "token:"+token)
-	}
-	// 同时从内存删除（防止降级情况）
-	s.mutex.Lock()
-	delete(s.token, token)
-	s.mutex.Unlock()
+	s.conn.Where("token = ?", token).Delete(&model.SessionModel{})
 }
 
-// GenerateCallbackToken 生成回调token
+// GenerateCallbackToken 生成回调 token
 func (s *AuthService) GenerateCallbackToken(user *model.UserModel) (string, error) {
 	token, err := s.generateToken()
 	if err != nil {
 		return "", err
 	}
 
-	// 存储临时token信息（5分钟有效期）
 	tokenInfo := &TokenInfo{
 		UserID:  user.ID,
 		IsAdmin: user.UserRole == model.RoleAdmin,
-		Expiry:  time.Now().Add(5 * time.Minute), // 临时token有效期5分钟
+		Expiry:  time.Now().Add(5 * time.Minute),
 	}
 
-	err = s.SetToken(token, tokenInfo)
-	if err != nil {
+	if err = s.SetToken(token, tokenInfo); err != nil {
 		return "", fmt.Errorf("%w: %v", consts.ErrTokenGenerationFailed, err)
 	}
 
@@ -481,7 +383,7 @@ func (s *AuthService) GenerateCallbackSign(token, email, suff string) (string, e
 	return fmt.Sprintf("sn-%x", mac.Sum(nil)[:16]), nil
 }
 
-// ValidateCallbackToken 验证 token
+// ValidateCallbackToken 验证回调 token
 func (s *AuthService) ValidateCallbackToken(token string) (*TokenInfo, bool) {
 	return s.GetToken(token)
 }
