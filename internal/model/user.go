@@ -1,9 +1,9 @@
 package model
 
 import (
-	"database/sql/driver"
-	"encoding/json"
 	"time"
+
+	relay "github.com/OptLTD/member/llm-relay"
 
 	"gorm.io/gorm"
 )
@@ -12,20 +12,22 @@ import (
 type UserModel struct {
 	ID uint64 `json:"id" gorm:"primarykey"`
 
-	Avatar   string `json:"avatar" gorm:"column:avatar;type:varchar(256)"`
-	Email    string `json:"email" gorm:"type:varchar(256);index;not null"`
-	Username string `json:"username" gorm:"type:varchar(128);index;not null"`
-	Password string `json:"password" gorm:"type:varchar(64);not null"`
-	APIKey   string `json:"apiKey" gorm:"column:api_key;type:varchar(68);index"`
-	IsActive bool   `json:"isActive" gorm:"column:is_active;default:true"`
-	Verified bool   `json:"verified" gorm:"column:verified;default:false"`
-	UserRole Role   `json:"userRole" gorm:"column:user_role;default:user"`
+	Avatar    string `json:"avatar" gorm:"column:avatar;type:varchar(256)"`
+	Email     string `json:"email" gorm:"type:varchar(256);index;not null"`
+	Username  string `json:"username" gorm:"type:varchar(128);index;not null"`
+	Password  string `json:"password" gorm:"type:varchar(64);not null"`
+	APIKey    string `json:"apiKey" gorm:"column:api_key;type:varchar(68);index"`
+	IsActive  bool   `json:"isActive" gorm:"column:is_active;default:true"`
+	Verified  bool   `json:"verified" gorm:"column:verified;default:false"`
+	UserRole  Role   `json:"userRole" gorm:"column:user_role;default:user"`
+	ProjectID uint64 `json:"projectId" gorm:"column:project_id;index;not null;default:0"`
 
 	// 当前套餐、过期时间
 	ExpireAt *time.Time `json:"expireAt" gorm:"column:expire_at;default:null"`     // 过期时间
 	UserPlan PayPlan    `json:"userPlan" gorm:"column:user_plan;type:varchar(20)"` // 用户套餐
-	ApiUsage *ApiUsage  `json:"apiUsage" gorm:"column:api_usage;serializer:json"`
-	ApiLimit *ApiLimit  `json:"apiLimit" gorm:"column:api_limit;serializer:json"`
+	// 用量/配额已拆到独立表 llm_user_quota，此处仅作内存/响应携带
+	ApiUsage *ApiUsage `json:"apiUsage" gorm:"-"`
+	ApiLimit *ApiLimit `json:"apiLimit" gorm:"-"`
 
 	gorm.Model
 }
@@ -113,6 +115,8 @@ func (u *UserModel) ToUserResponse() *UserResponse {
 		UserRole:  u.UserRole,
 		UserPlan:  u.UserPlan,
 		ExpireAt:  u.ExpireAt,
+		ApiUsage:  u.ApiUsage,
+		ApiLimit:  u.ApiLimit,
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
 	}
@@ -152,72 +156,22 @@ type StatsResponse struct {
 	AnalyticsWeekEvents int64 `json:"analyticsWeekEvents,omitempty"`
 }
 
-type ApiUsage struct {
-	TotalTokens   uint64 `json:"totalTokens"`
-	TotalRequests uint64 `json:"totalRequests"`
-	TotalProjects uint64 `json:"totalProjects"`
+// ApiUsage 用户用量（类型定义与序列化见 llm-relay 包）
+type ApiUsage = relay.ApiUsage
 
-	TodayTokens   uint64 `json:"todayTokens"`
-	TodayRequests uint64 `json:"todayRequests"`
-	TodayProjects uint64 `json:"todayProjects"`
+// ApiLimit 用户配额（类型定义与序列化见 llm-relay 包）
+type ApiLimit = relay.ApiLimit
 
-	// DayStamp 用于日切重置 Today* 字段，格式 YYYY-MM-DD
-	DayStamp string `json:"dayStamp,omitempty"`
-}
-type ApiLimit struct {
-	// 过期天数
-	ExpireDays int `json:"expireDays,omitempty"`
-	// 限制方法：tokens, requests, projects
-	LimitMethod string `json:"limitMethod,omitempty"`
+// GetID 实现 relay.User 接口
+func (u *UserModel) GetID() uint64 { return u.ID }
 
-	DailyTokens   uint64 `json:"dailyTokens,omitempty"`
-	MonthlyTokens uint64 `json:"monthlyTokens,omitempty"`
+// GetProjectID 实现 relay.User 接口
+func (u *UserModel) GetProjectID() uint64 { return u.ProjectID }
 
-	DailyRequests   uint64 `json:"dailyRequests,omitempty"`
-	MonthlyRequests uint64 `json:"monthlyRequests,omitempty"`
-
-	DailyProjects   uint64 `json:"dailyProjects,omitempty"`
-	MonthlyProjects uint64 `json:"monthlyProjects,omitempty"`
-}
-
-// Value implements driver.Valuer interface for ApiUsage
-func (a ApiUsage) Value() (driver.Value, error) {
-	return json.Marshal(a)
-}
-
-// Scan implements sql.Scanner interface for ApiUsage
-func (a *ApiUsage) Scan(value interface{}) error {
-	if value == nil {
-		return nil
+// GetLimitMethod 实现 relay.User 接口；未配置配额时返回空字符串
+func (u *UserModel) GetLimitMethod() string {
+	if u.ApiLimit == nil {
+		return ""
 	}
-
-	switch v := value.(type) {
-	case []byte:
-		return json.Unmarshal(v, a)
-	case string:
-		return json.Unmarshal([]byte(v), a)
-	default:
-		return nil
-	}
-}
-
-// Value implements driver.Valuer interface for ApiLimit
-func (a ApiLimit) Value() (driver.Value, error) {
-	return json.Marshal(a)
-}
-
-// Scan implements sql.Scanner interface for ApiLimit
-func (a *ApiLimit) Scan(value interface{}) error {
-	if value == nil {
-		return nil
-	}
-
-	switch v := value.(type) {
-	case []byte:
-		return json.Unmarshal(v, a)
-	case string:
-		return json.Unmarshal([]byte(v), a)
-	default:
-		return nil
-	}
+	return u.ApiLimit.LimitMethod
 }

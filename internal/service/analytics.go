@@ -10,8 +10,8 @@ import (
 
 	"github.com/OptLTD/member/internal/config"
 
-	"github.com/google/uuid"
 	"github.com/OptLTD/member/internal/model"
+	"github.com/google/uuid"
 
 	"gorm.io/gorm"
 )
@@ -31,7 +31,7 @@ func EnsureDefaultSite() error {
 	if !config.HasModule(config.ModuleAnalytics) {
 		return nil
 	}
-	_, err := NewAnalyticsService().GetDefaultSite()
+	_, err := NewAnalyticsService().GetDefaultSite(0)
 	return err
 }
 
@@ -43,9 +43,9 @@ func (s *AnalyticsService) hashIP(ip string) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-func (s *AnalyticsService) GetDefaultSite() (*model.SiteModel, error) {
+func (s *AnalyticsService) GetDefaultSite(projectID uint64) (*model.SiteModel, error) {
 	var site model.SiteModel
-	err := s.db.Where("name = ? AND status = ?", defaultSiteName, "active").First(&site).Error
+	err := s.db.Where("project_id = ? AND name = ? AND status = ?", projectID, defaultSiteName, "active").First(&site).Error
 	if err == nil {
 		return &site, nil
 	}
@@ -53,13 +53,14 @@ func (s *AnalyticsService) GetDefaultSite() (*model.SiteModel, error) {
 		return nil, err
 	}
 	// 兼容旧数据：使用第一个站点
-	if err := s.db.Where("status = ?", "active").Order("id asc").First(&site).Error; err == nil {
+	if err := s.db.Where("project_id = ? AND status = ?", projectID, "active").Order("id asc").First(&site).Error; err == nil {
 		return &site, nil
 	}
 	site = model.SiteModel{
-		SiteKey: strings.ReplaceAll(uuid.New().String(), "-", "")[:16],
-		Name:    defaultSiteName,
-		Status:  "active",
+		ProjectID: projectID,
+		SiteKey:   strings.ReplaceAll(uuid.New().String(), "-", "")[:16],
+		Name:      defaultSiteName,
+		Status:    "active",
 	}
 	if err := s.db.Create(&site).Error; err != nil {
 		return nil, err
@@ -67,18 +68,18 @@ func (s *AnalyticsService) GetDefaultSite() (*model.SiteModel, error) {
 	return &site, nil
 }
 
-func (s *AnalyticsService) resolveSite(siteKey string) (*model.SiteModel, error) {
+func (s *AnalyticsService) resolveSite(projectID uint64, siteKey string) (*model.SiteModel, error) {
 	key := strings.TrimSpace(siteKey)
 	if key == "" {
-		return s.GetDefaultSite()
+		return s.GetDefaultSite(projectID)
 	}
 	var site model.SiteModel
-	err := s.db.Where("site_key = ? AND status = ?", key, "active").First(&site).Error
+	err := s.db.Where("project_id = ? AND site_key = ? AND status = ?", projectID, key, "active").First(&site).Error
 	return &site, err
 }
 
-func (s *AnalyticsService) GetSiteByKey(siteKey string) (*model.SiteModel, error) {
-	return s.resolveSite(siteKey)
+func (s *AnalyticsService) GetSiteByKey(projectID uint64, siteKey string) (*model.SiteModel, error) {
+	return s.resolveSite(projectID, siteKey)
 }
 
 func (s *AnalyticsService) CreateSite(site *model.SiteModel) error {
@@ -97,19 +98,24 @@ func (s *AnalyticsService) UpdateSite(id uint64, site *model.SiteModel) error {
 	}).Error
 }
 
-func (s *AnalyticsService) ListSites() ([]model.SiteModel, error) {
+func (s *AnalyticsService) ListSites(projectID uint64) ([]model.SiteModel, error) {
 	var sites []model.SiteModel
-	err := s.db.Order("id desc").Find(&sites).Error
+	q := s.db.Order("id desc")
+	if projectID > 0 {
+		q = q.Where("project_id = ?", projectID)
+	}
+	err := q.Find(&sites).Error
 	return sites, err
 }
 
-func (s *AnalyticsService) Track(req *model.TrackRequest, userID uint64, clientIP string) error {
-	site, err := s.resolveSite(req.SiteKey)
+func (s *AnalyticsService) Track(projectID uint64, req *model.TrackRequest, userID uint64, clientIP string) error {
+	site, err := s.resolveSite(projectID, req.SiteKey)
 	if err != nil {
 		return errors.New("invalid site")
 	}
 	props := model.EventProps(req.Props)
 	event := &model.EventModel{
+		ProjectID:   projectID,
 		SiteID:      site.ID,
 		UserID:      userID,
 		EventType:   req.EventType,
@@ -128,16 +134,16 @@ func (s *AnalyticsService) Track(req *model.TrackRequest, userID uint64, clientI
 	if err := s.db.Create(event).Error; err != nil {
 		return err
 	}
-	s.upsertDaily(site.ID, req)
+	s.upsertDaily(projectID, site.ID, req)
 	return nil
 }
 
-func (s *AnalyticsService) upsertDaily(siteID uint64, req *model.TrackRequest) {
+func (s *AnalyticsService) upsertDaily(projectID, siteID uint64, req *model.TrackRequest) {
 	day := time.Now().Format("2006-01-02")
 	var daily model.EventDailyModel
-	err := s.db.Where("site_id = ? AND day = ?", siteID, day).First(&daily).Error
+	err := s.db.Where("project_id = ? AND site_id = ? AND day = ?", projectID, siteID, day).First(&daily).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		daily = model.EventDailyModel{SiteID: siteID, Day: day, PV: 0, UV: 0, Events: 0}
+		daily = model.EventDailyModel{ProjectID: projectID, SiteID: siteID, Day: day, PV: 0, UV: 0, Events: 0}
 	}
 	daily.Events++
 	if req.EventType == "app.page_view" || req.EventType == "page_view" {
@@ -153,11 +159,11 @@ func (s *AnalyticsService) upsertDaily(siteID uint64, req *model.TrackRequest) {
 	}
 }
 
-func (s *AnalyticsService) TrackInternal(userID uint64, eventType string, props map[string]any) error {
+func (s *AnalyticsService) TrackInternal(projectID, userID uint64, eventType string, props map[string]any) error {
 	if !config.HasModule(config.ModuleAnalytics) {
 		return nil
 	}
-	site, err := s.GetDefaultSite()
+	site, err := s.GetDefaultSite(projectID)
 	if err != nil {
 		return err
 	}
@@ -166,10 +172,10 @@ func (s *AnalyticsService) TrackInternal(userID uint64, eventType string, props 
 		EventType: eventType,
 		Props:     props,
 	}
-	return s.Track(req, userID, "")
+	return s.Track(projectID, req, userID, "")
 }
 
-func (s *AnalyticsService) ListEvents(siteID uint64, page, size int) ([]model.EventModel, int64, error) {
+func (s *AnalyticsService) ListEvents(projectID, siteID uint64, page, size int) ([]model.EventModel, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -179,6 +185,9 @@ func (s *AnalyticsService) ListEvents(siteID uint64, page, size int) ([]model.Ev
 	var total int64
 	var events []model.EventModel
 	q := s.db.Model(&model.EventModel{})
+	if projectID > 0 {
+		q = q.Where("project_id = ?", projectID)
+	}
 	if siteID > 0 {
 		q = q.Where("site_id = ?", siteID)
 	}
@@ -187,22 +196,22 @@ func (s *AnalyticsService) ListEvents(siteID uint64, page, size int) ([]model.Ev
 	return events, total, err
 }
 
-func (s *AnalyticsService) Overview(siteID uint64) (map[string]any, error) {
+func (s *AnalyticsService) Overview(projectID, siteID uint64) (map[string]any, error) {
 	if siteID == 0 {
-		if site, err := s.GetDefaultSite(); err == nil {
+		if site, err := s.GetDefaultSite(projectID); err == nil {
 			siteID = site.ID
 		}
 	}
 	day := time.Now().Format("2006-01-02")
 	var daily model.EventDailyModel
-	q := s.db.Where("day = ?", day)
+	q := s.db.Where("project_id = ? AND day = ?", projectID, day)
 	if siteID > 0 {
 		q = q.Where("site_id = ?", siteID)
 	}
 	_ = q.First(&daily).Error
 
 	var totalEvents int64
-	evQ := s.db.Model(&model.EventModel{}).Where("created_at >= ?", time.Now().AddDate(0, 0, -7))
+	evQ := s.db.Model(&model.EventModel{}).Where("project_id = ? AND created_at >= ?", projectID, time.Now().AddDate(0, 0, -7))
 	if siteID > 0 {
 		evQ = evQ.Where("site_id = ?", siteID)
 	}

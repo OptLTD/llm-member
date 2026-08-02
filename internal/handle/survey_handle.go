@@ -20,7 +20,7 @@ func NewSurveyHandle() *SurveyHandle {
 
 func (h *SurveyHandle) GetPublic(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	survey, questions, err := h.svc.GetPublished(id)
+	survey, questions, err := h.svc.GetPublished(service.ProjectID(c), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
@@ -36,7 +36,7 @@ func (h *SurveyHandle) Submit(c *gin.Context) {
 		return
 	}
 	userID := c.GetUint64("UserID")
-	if err := h.svc.Submit(id, userID, req.Answers); err != nil {
+	if err := h.svc.Submit(service.ProjectID(c), id, userID, req.Answers); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -44,7 +44,7 @@ func (h *SurveyHandle) Submit(c *gin.Context) {
 }
 
 func (h *SurveyHandle) List(c *gin.Context) {
-	list, err := h.svc.List()
+	list, err := h.svc.List(service.ProjectID(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -54,7 +54,7 @@ func (h *SurveyHandle) List(c *gin.Context) {
 
 func (h *SurveyHandle) Get(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	survey, questions, err := h.svc.Get(id)
+	survey, questions, err := h.svc.Get(service.ProjectID(c), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
@@ -68,7 +68,7 @@ func (h *SurveyHandle) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.svc.Create(&survey); err != nil {
+	if err := h.svc.Create(service.ProjectID(c), &survey); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -82,7 +82,7 @@ func (h *SurveyHandle) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.svc.Update(id, &survey); err != nil {
+	if err := h.svc.Update(service.ProjectID(c), id, &survey); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -95,7 +95,7 @@ func (h *SurveyHandle) SaveQuestion(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.svc.SaveQuestion(&q); err != nil {
+	if err := h.svc.SaveQuestion(service.ProjectID(c), &q); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -104,7 +104,7 @@ func (h *SurveyHandle) SaveQuestion(c *gin.Context) {
 
 func (h *SurveyHandle) DeleteQuestion(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := h.svc.DeleteQuestion(id); err != nil {
+	if err := h.svc.DeleteQuestion(service.ProjectID(c), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -113,11 +113,11 @@ func (h *SurveyHandle) DeleteQuestion(c *gin.Context) {
 
 func (h *SurveyHandle) Responses(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	list, err := h.svc.ListResponses(id)
+	list, err := h.svc.ListResponses(service.ProjectID(c), id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	stats, _ := h.svc.Stats(id)
+	stats, _ := h.svc.Stats(service.ProjectID(c), id)
 	c.JSON(http.StatusOK, gin.H{"responses": list, "stats": stats})
 }

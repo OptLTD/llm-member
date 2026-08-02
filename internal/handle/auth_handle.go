@@ -2,7 +2,6 @@ package handle
 
 import (
 	"fmt"
-	"github.com/OptLTD/member/internal/config"
 	"github.com/OptLTD/member/internal/model"
 	"github.com/OptLTD/member/internal/service"
 	"log"
@@ -48,15 +47,15 @@ func (h *AuthHandle) UserSignUp(c *gin.Context) {
 		RefCode:  req.RefCode,
 	}
 
-	// 注册用户
-	user, err := h.authService.SignUp(signup)
+	// 注册用户（绑定到当前项目）
+	user, err := h.authService.SignUp(signup, service.ProjectID(c))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	// 生成注册 token
-	token, err := h.authService.GenerateSignupCode(signup.Email)
+	token, err := h.authService.GenerateSignupCode(service.ProjectID(c), signup.Email)
 	if err != nil {
 		h.authService.DeleteSignup(user)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -89,6 +88,9 @@ func (h *AuthHandle) UserSignIn(c *gin.Context) {
 	var user *model.UserModel
 	var err error
 
+	// 按项目隔离
+	projectID := service.ProjectID(c)
+
 	// 1. 尝试用户名登录
 	user, err = h.userService.GetUserByUsername(req.Username)
 	if err != nil {
@@ -112,7 +114,7 @@ func (h *AuthHandle) UserSignIn(c *gin.Context) {
 	}
 
 	// 生成 token
-	token, _, err := h.authService.SignIn(user.Username, req.Password)
+	token, _, err := h.authService.SignIn(user.Username, req.Password, projectID)
 	if err != nil {
 		log.Println("SignIn failed:", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -146,7 +148,7 @@ func (h *AuthHandle) AdminSignIn(c *gin.Context) {
 		return
 	}
 
-	token, user, err := h.authService.SignIn(req.Username, req.Password)
+	token, user, err := h.authService.SignIn(req.Username, req.Password, 0)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
@@ -179,7 +181,7 @@ func (h *AuthHandle) ForgotPassword(c *gin.Context) {
 	}
 
 	// 生成重置token
-	token, err := h.authService.ForgotPassword(req.Email)
+	token, err := h.authService.ForgotPassword(service.ProjectID(c), req.Email)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -278,8 +280,8 @@ func (h *AuthHandle) BuildCallbackToken(c *gin.Context) {
 		return
 	}
 
-	// 获取AUTH_CALLBACK配置
-	callbackUrl := config.GetAuthCallback()
+	// 获取项目回调配置（优先项目级，否则全局）
+	callbackUrl := service.NewProjectService().AuthCallback(service.ProjectID(c))
 	if callbackUrl == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "未配置AUTH_CALLBACK"})
 		return

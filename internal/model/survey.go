@@ -13,10 +13,10 @@ const (
 	SurveyStatusPublished = "published"
 	SurveyStatusClosed    = "closed"
 
-	QuestionTypeSingle  = "single"
-	QuestionTypeMulti   = "multi"
-	QuestionTypeText    = "text"
-	QuestionTypeRating  = "rating"
+	QuestionTypeSingle = "single"
+	QuestionTypeMulti  = "multi"
+	QuestionTypeText   = "text"
+	QuestionTypeRating = "rating"
 )
 
 type SurveyOptions []string
@@ -73,12 +73,13 @@ func (a *AnswerMap) Scan(value interface{}) error {
 type SurveyModel struct {
 	ID uint64 `json:"id" gorm:"primarykey"`
 
-	Title       string `json:"title" gorm:"column:title;type:varchar(256);not null"`
-	Description string `json:"description" gorm:"column:description;type:text"`
-	Status     string     `json:"status" gorm:"column:status;type:varchar(20);default:draft"`
-	TargetPlan string     `json:"targetPlan" gorm:"column:target_plan;type:varchar(64)"`
-	StartAt    *time.Time `json:"startAt" gorm:"column:start_at"`
-	EndAt      *time.Time `json:"endAt" gorm:"column:end_at"`
+	Title       string     `json:"title" gorm:"column:title;type:varchar(256);not null"`
+	ProjectID   uint64     `json:"projectId" gorm:"column:project_id;index;not null;default:0"`
+	Description string     `json:"description" gorm:"column:description;type:text"`
+	Status      string     `json:"status" gorm:"column:status;type:varchar(20);default:draft"`
+	TargetPlan  string     `json:"targetPlan" gorm:"column:target_plan;type:varchar(64)"`
+	StartAt     *time.Time `json:"startAt" gorm:"column:start_at"`
+	EndAt       *time.Time `json:"endAt" gorm:"column:end_at"`
 
 	gorm.Model
 }
@@ -89,12 +90,13 @@ func (SurveyModel) TableName() string { return "member_survey" }
 type SurveyQuestionModel struct {
 	ID uint64 `json:"id" gorm:"primarykey"`
 
-	SurveyID uint64        `json:"surveyId" gorm:"column:survey_id;index;not null"`
-	Type     string        `json:"type" gorm:"column:type;type:varchar(20);not null"`
-	Title    string        `json:"title" gorm:"column:title;type:varchar(512);not null"`
-	Options  SurveyOptions `json:"options" gorm:"column:options;serializer:json"`
-	Required bool          `json:"required" gorm:"column:required;default:false"`
-	Sort     int           `json:"sort" gorm:"column:sort;default:0"`
+	SurveyID  uint64        `json:"surveyId" gorm:"column:survey_id;index;not null"`
+	ProjectID uint64        `json:"projectId" gorm:"column:project_id;index;not null;default:0"`
+	Type      string        `json:"type" gorm:"column:type;type:varchar(20);not null"`
+	Title     string        `json:"title" gorm:"column:title;type:varchar(512);not null"`
+	Options   SurveyOptions `json:"options" gorm:"column:options;serializer:json"`
+	Required  bool          `json:"required" gorm:"column:required;default:false"`
+	Sort      int           `json:"sort" gorm:"column:sort;default:0"`
 
 	gorm.Model
 }
@@ -105,9 +107,10 @@ func (SurveyQuestionModel) TableName() string { return "member_survey_question" 
 type SurveyResponseModel struct {
 	ID uint64 `json:"id" gorm:"primarykey"`
 
-	SurveyID uint64    `json:"surveyId" gorm:"column:survey_id;index;not null"`
-	UserID   uint64    `json:"userId" gorm:"column:user_id;index"`
-	Answers  AnswerMap `json:"answers" gorm:"column:answers;serializer:json"`
+	SurveyID  uint64    `json:"surveyId" gorm:"column:survey_id;index;not null"`
+	ProjectID uint64    `json:"projectId" gorm:"column:project_id;index;not null;default:0"`
+	UserID    uint64    `json:"userId" gorm:"column:user_id;index"`
+	Answers   AnswerMap `json:"answers" gorm:"column:answers;serializer:json"`
 
 	gorm.Model
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/OptLTD/member/internal/config"
 	"github.com/OptLTD/member/internal/model"
+	relay "github.com/OptLTD/member/llm-relay"
 
 	"gorm.io/gorm"
 )
@@ -25,27 +26,27 @@ func NewStatsService() *StatsService {
 	}
 }
 
-// GetStats 获取完整的统计信息
-func (s *StatsService) GetStats() (*model.StatsResponse, error) {
+// GetStats 获取完整的统计信息（按项目过滤）
+func (s *StatsService) GetStats(projectID uint64) (*model.StatsResponse, error) {
 	stats := &model.StatsResponse{}
 
 	// API统计
-	if err := s.getAPIStats(stats); err != nil {
+	if err := s.getAPIStats(stats, projectID); err != nil {
 		return nil, err
 	}
 
 	// 会员统计
-	if err := s.getMemberStats(stats); err != nil {
+	if err := s.getMemberStats(stats, projectID); err != nil {
 		return nil, err
 	}
 
 	// 订单统计
-	if err := s.getOrderStats(stats); err != nil {
+	if err := s.getOrderStats(stats, projectID); err != nil {
 		return nil, err
 	}
 
 	if config.HasModule(config.ModuleAnalytics) {
-		if overview, err := NewAnalyticsService().Overview(0); err == nil {
+		if overview, err := NewAnalyticsService().Overview(projectID, 0); err == nil {
 			if v, ok := overview["todayPV"].(int64); ok {
 				stats.AnalyticsTodayPV = v
 			}
@@ -59,42 +60,51 @@ func (s *StatsService) GetStats() (*model.StatsResponse, error) {
 }
 
 // getAPIStats 获取API相关统计
-func (s *StatsService) getAPIStats(stats *model.StatsResponse) error {
+func (s *StatsService) getAPIStats(stats *model.StatsResponse, projectID uint64) error {
 	// 获取当前自然月的开始和结束时间
 	now := time.Now()
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	nextMonth := monthStart.AddDate(0, 1, 0)
 
+	// 项目范围过滤
+	scoped := func() *gorm.DB {
+		q := s.db.Model(&model.LlmLogModel{})
+		if projectID > 0 {
+			q = q.Where("project_id = ?", projectID)
+		}
+		return q
+	}
+
 	// 总请求数（当前月）
-	s.db.Model(&model.LlmLogModel{}).
+	scoped().
 		Where("req_time >= ? AND req_time < ?", monthStart, nextMonth).
 		Count(&stats.TotalRequests)
 
 	// 使用JSON函数直接从all_usage字段提取token统计（当前月）
-	s.db.Model(&model.LlmLogModel{}).
+	scoped().
 		Where("status = ? AND req_time >= ? AND req_time < ?", "success", monthStart, nextMonth).
 		Select(fmt.Sprintf("COALESCE(SUM(%s), 0)", jsonIntExpr(s.db, "all_usage", "totalTokens"))).
 		Scan(&stats.TotalTokens)
 
-	s.db.Model(&model.LlmLogModel{}).
+	scoped().
 		Where("status = ? AND req_time >= ? AND req_time < ?", "success", monthStart, nextMonth).
 		Select(fmt.Sprintf("COALESCE(SUM(%s), 0)", jsonIntExpr(s.db, "all_usage", "promptTokens"))).
 		Scan(&stats.InputTokens)
 
-	s.db.Model(&model.LlmLogModel{}).
+	scoped().
 		Where("status = ? AND req_time >= ? AND req_time < ?", "success", monthStart, nextMonth).
 		Select(fmt.Sprintf("COALESCE(SUM(%s), 0)", jsonIntExpr(s.db, "all_usage", "completionTokens"))).
 		Scan(&stats.OutputTokens)
 
 	// 平均响应时间（当前月）
-	s.db.Model(&model.LlmLogModel{}).
+	scoped().
 		Where("status = ? AND req_time >= ? AND req_time < ?", "success", monthStart, nextMonth).
 		Select("COALESCE(AVG(duration), 0)").
 		Scan(&stats.AvgDuration)
 
 	// 成功率（当前月）
 	var successCount int64
-	s.db.Model(&model.LlmLogModel{}).
+	scoped().
 		Where("status = ? AND req_time >= ? AND req_time < ?", "success", monthStart, nextMonth).
 		Count(&successCount)
 	if stats.TotalRequests > 0 {
@@ -103,11 +113,11 @@ func (s *StatsService) getAPIStats(stats *model.StatsResponse) error {
 
 	// 今日请求数
 	today := time.Now().Truncate(24 * time.Hour)
-	s.db.Model(&model.LlmLogModel{}).Where("req_time >= ?", today).Count(&stats.RequestsToday)
+	scoped().Where("req_time >= ?", today).Count(&stats.RequestsToday)
 
 	// 本周请求数
 	weekStart := today.AddDate(0, 0, -int(today.Weekday()))
-	s.db.Model(&model.LlmLogModel{}).Where("req_time >= ?", weekStart).Count(&stats.RequestsThisWeek)
+	scoped().Where("req_time >= ?", weekStart).Count(&stats.RequestsThisWeek)
 
 	// 模型使用统计（当前月）
 	stats.ModelUsage = make(map[string]int64)
@@ -115,7 +125,7 @@ func (s *StatsService) getAPIStats(stats *model.StatsResponse) error {
 		Model string
 		Count int64
 	}
-	s.db.Model(&model.LlmLogModel{}).
+	scoped().
 		Where("req_time >= ? AND req_time < ?", monthStart, nextMonth).
 		Select("model, COUNT(*) as count").Group("model").Scan(&modelStats)
 	for _, stat := range modelStats {
@@ -128,7 +138,7 @@ func (s *StatsService) getAPIStats(stats *model.StatsResponse) error {
 		Provider string
 		Count    int64
 	}
-	s.db.Model(&model.LlmLogModel{}).
+	scoped().
 		Where("req_time >= ? AND req_time < ?", monthStart, nextMonth).
 		Select("provider, COUNT(*) as count").
 		Group("provider").
@@ -141,52 +151,66 @@ func (s *StatsService) getAPIStats(stats *model.StatsResponse) error {
 }
 
 // getMemberStats 获取会员相关统计
-func (s *StatsService) getMemberStats(stats *model.StatsResponse) error {
+func (s *StatsService) getMemberStats(stats *model.StatsResponse, projectID uint64) error {
+	scoped := func() *gorm.DB {
+		q := s.db.Model(&model.UserModel{})
+		if projectID > 0 {
+			q = q.Where("project_id = ?", projectID)
+		}
+		return q
+	}
 	// 总会员数
-	s.db.Model(&model.UserModel{}).Count(&stats.TotalMembers)
+	scoped().Count(&stats.TotalMembers)
 
 	// 付费会员数（非basic套餐的用户）
-	s.db.Model(&model.UserModel{}).Where("user_plan != ?", "basic").Count(&stats.PaidMembers)
+	scoped().Where("user_plan != ?", "basic").Count(&stats.PaidMembers)
 
 	// 本月新增会员数
 	monthStart := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.Local)
-	s.db.Model(&model.UserModel{}).Where("created_at >= ?", monthStart).Count(&stats.MonthlyNewMembers)
+	scoped().Where("created_at >= ?", monthStart).Count(&stats.MonthlyNewMembers)
 
 	// 本月新增付费会员数
-	s.db.Model(&model.UserModel{}).Where("created_at >= ? AND user_plan != ?", monthStart, "basic").Count(&stats.MonthlyNewPaidMembers)
+	scoped().Where("created_at >= ? AND user_plan != ?", monthStart, "basic").Count(&stats.MonthlyNewPaidMembers)
 
 	return nil
 }
 
 // getOrderStats 获取订单相关统计
-func (s *StatsService) getOrderStats(stats *model.StatsResponse) error {
+func (s *StatsService) getOrderStats(stats *model.StatsResponse, projectID uint64) error {
+	scoped := func() *gorm.DB {
+		q := s.db.Model(&model.OrderModel{})
+		if projectID > 0 {
+			q = q.Where("project_id = ?", projectID)
+		}
+		return q
+	}
 	// 总订单数
-	s.db.Model(&model.OrderModel{}).Count(&stats.TotalOrders)
+	scoped().Count(&stats.TotalOrders)
 
 	// 成功订单数
-	s.db.Model(&model.OrderModel{}).Where("status = ?", "succeed").Count(&stats.SuccessfulOrders)
+	scoped().Where("status = ?", "succeed").Count(&stats.SuccessfulOrders)
 
 	// 总收入
-	s.db.Model(&model.OrderModel{}).Select("COALESCE(SUM(amount), 0)").Scan(&stats.TotalRevenue)
+	scoped().Select("COALESCE(SUM(amount), 0)").Scan(&stats.TotalRevenue)
 
 	// 成功订单收入
-	s.db.Model(&model.OrderModel{}).Where("status = ?", "succeed").Select("COALESCE(SUM(amount), 0)").Scan(&stats.SuccessfulRevenue)
+	scoped().Where("status = ?", "succeed").Select("COALESCE(SUM(amount), 0)").Scan(&stats.SuccessfulRevenue)
 
 	// 本月收入
 	monthStart := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.Local)
-	s.db.Model(&model.OrderModel{}).Where("created_at >= ?", monthStart).Select("COALESCE(SUM(amount), 0)").Scan(&stats.MonthlyRevenue)
+	scoped().Where("created_at >= ?", monthStart).Select("COALESCE(SUM(amount), 0)").Scan(&stats.MonthlyRevenue)
 
 	// 本月成功订单收入
-	s.db.Model(&model.OrderModel{}).Where("created_at >= ? AND status = ?", monthStart, "succeed").Select("COALESCE(SUM(amount), 0)").Scan(&stats.MonthlySuccessfulRevenue)
+	scoped().Where("created_at >= ? AND status = ?", monthStart, "succeed").Select("COALESCE(SUM(amount), 0)").Scan(&stats.MonthlySuccessfulRevenue)
 
 	// 本周收入
 	now := time.Now()
 	weekStart := now.AddDate(0, 0, -int(now.Weekday()))
 	weekStart = time.Date(weekStart.Year(), weekStart.Month(), weekStart.Day(), 0, 0, 0, 0, time.Local)
-	s.db.Model(&model.OrderModel{}).Where("created_at >= ?", weekStart).Select("COALESCE(SUM(amount), 0)").Scan(&stats.WeeklyRevenue)
+	scoped().Where("created_at >= ?", weekStart).Select("COALESCE(SUM(amount), 0)").Scan(&stats.WeeklyRevenue)
 
 	// 本周成功订单收入
-	s.db.Model(&model.OrderModel{}).Where("created_at >= ? AND status = ?", weekStart, "succeed").Select("COALESCE(SUM(amount), 0)").Scan(&stats.WeeklySuccessfulRevenue)
+	scoped().Where("created_at >= ? AND status = ?", weekStart, "succeed").Select("COALESCE(SUM(amount), 0)").Scan(&stats.WeeklySuccessfulRevenue)
 
 	return nil
 }
@@ -196,8 +220,8 @@ func (s *StatsService) UpdateUserStats(user *model.UserModel) error {
 	if user == nil {
 		return nil
 	}
-	EnsureUsageReady(user)
-	return s.db.Model(&model.UserModel{}).
-		Where("id = ?", user.ID).
+	user.ApiUsage = relay.EnsureUsageReady(user.ApiUsage)
+	return s.db.Model(&model.UserQuotaModel{}).
+		Where("user_id = ?", user.ID).
 		Update("api_usage", user.ApiUsage).Error
 }

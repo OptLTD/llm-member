@@ -28,7 +28,7 @@ func (s *DeviceService) maxDevicesForUser(user *model.UserModel) (int, error) {
 		return 0, errors.New("user required")
 	}
 	plan := &model.PlanInfo{Plan: string(user.UserPlan)}
-	if err := s.setup.GetAsTarget("plan."+plan.Plan, plan); err != nil {
+	if err := s.setup.GetAsTarget(user.ProjectID, "plan."+plan.Plan, plan); err != nil {
 		return 1, nil
 	}
 	if plan.MaxDevices > 0 {
@@ -83,6 +83,7 @@ func (s *DeviceService) Bind(userID uint64, req *model.BindDeviceRequest) (*mode
 	}
 
 	device := &model.DeviceModel{
+		ProjectID:  user.ProjectID,
 		UserID:     userID,
 		DeviceID:   req.DeviceID,
 		DeviceName: req.DeviceName,
@@ -94,7 +95,7 @@ func (s *DeviceService) Bind(userID uint64, req *model.BindDeviceRequest) (*mode
 		return nil, err
 	}
 	if config.HasModule(config.ModuleAnalytics) {
-		_ = NewAnalyticsService().TrackInternal(userID, "device.bind", map[string]any{
+		_ = NewAnalyticsService().TrackInternal(user.ProjectID, userID, "device.bind", map[string]any{
 			"deviceId": req.DeviceID,
 		})
 	}
@@ -122,9 +123,12 @@ func (s *DeviceService) Unbind(userID, deviceRowID uint64, isAdmin bool) error {
 	return nil
 }
 
-func (s *DeviceService) ListByAdmin(userID uint64) ([]model.DeviceModel, error) {
+func (s *DeviceService) ListByAdmin(projectID, userID uint64) ([]model.DeviceModel, error) {
 	var devices []model.DeviceModel
 	q := s.db.Order("last_seen_at desc")
+	if projectID > 0 {
+		q = q.Where("project_id = ?", projectID)
+	}
 	if userID > 0 {
 		q = q.Where("user_id = ?", userID)
 	}

@@ -1,10 +1,8 @@
-package handle
+package relay
 
 import (
 	"context"
 	"encoding/json"
-	"github.com/OptLTD/member/internal/model"
-	"github.com/OptLTD/member/internal/service"
 	"net/http"
 	"os"
 	"strings"
@@ -13,60 +11,104 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type RelayHandle struct {
-	logService   *service.LogService
-	userService  *service.UserService
-	relayService *service.RelayService
-	setupService *service.SetupService
-	tokenService *service.TokenService
-	quotaService *service.QuotaService
-	statsService *service.StatsService
+// GetUserFunc 从 gin 上下文中取出当前用户；默认读取 "user" 键并断言为 User。
+type GetUserFunc func(c *gin.Context) (User, bool)
+
+// ServiceForFunc 按请求解析 Service（例如按项目动态配置上游）
+type ServiceForFunc func(c *gin.Context) *Service
+
+// Handler LLM 中继的 HTTP 处理器。
+type Handler struct {
+	service      *Service
+	svcFor       ServiceForFunc
+	tokenCounter *TokenCounter
+	quota        Quota
+	logs         Logger
+	getUser      GetUserFunc
 }
 
-func NewRelayHandle() *RelayHandle {
-	return &RelayHandle{
-		logService:   service.NewLogService(),
-		userService:  service.NewUserService(),
-		relayService: service.NewRelayService(),
-		setupService: service.NewSetupService(),
-		tokenService: service.NewTokenService(),
-		quotaService: service.NewQuotaService(),
-		statsService: service.NewStatsService(),
+// HandlerOption 处理器选项
+type HandlerOption func(*Handler)
+
+// HandlerWithServiceFor 自定义按请求解析 Service（例如按项目 LLM 配置）
+func HandlerWithServiceFor(fn ServiceForFunc) HandlerOption {
+	return func(h *Handler) {
+		if fn != nil {
+			h.svcFor = fn
+		}
 	}
 }
 
-// 定义callback函数类型
-type FinishCallback func(err error, response *model.ChatResponse)
+// HandlerWithUser 自定义用户提取方式
+func HandlerWithUser(getUser GetUserFunc) HandlerOption {
+	return func(h *Handler) {
+		if getUser != nil {
+			h.getUser = getUser
+		}
+	}
+}
 
-func (h *RelayHandle) ChatCompletions(c *gin.Context) {
-	var req model.ChatRequest
+// NewHandler 创建中继处理器。
+// 默认从 gin 上下文 "user" 键取用户。
+func NewHandler(service *Service, quota Quota, logs Logger, opts ...HandlerOption) *Handler {
+	h := &Handler{
+		service:      service,
+		tokenCounter: NewTokenCounter(),
+		quota:        quota,
+		logs:         logs,
+		getUser: func(c *gin.Context) (User, bool) {
+			v, ok := c.Get("user")
+			if !ok {
+				return nil, false
+			}
+			u, ok := v.(User)
+			return u, ok
+		},
+	}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
+}
+
+// svc 返回本次请求使用的 Service
+func (h *Handler) svc(c *gin.Context) *Service {
+	if h.svcFor != nil {
+		return h.svcFor(c)
+	}
+	return h.service
+}
+
+// ChatCompletions 处理 /v1/chat/completions
+func (h *Handler) ChatCompletions(c *gin.Context) {
+	var req ChatRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	var startTime = time.Now()
-	var userInfo *model.UserModel
-	if user, exists := c.Get("user"); !exists {
+	var userInfo User
+	if user, exists := h.getUser(c); !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "未找到用户信息"})
 		return
 	} else {
-		userInfo = user.(*model.UserModel)
+		userInfo = user
 	}
 
-	if err := h.tokenService.CheckUsage(userInfo); err != nil {
+	if err := h.quota.CheckUsage(userInfo); err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
 	reserveAmount := uint64(1)
-	if userInfo.ApiLimit != nil && userInfo.ApiLimit.LimitMethod == "tokens" {
-		if n, err := h.tokenService.CountMsgsToken(req.Messages, req.Model, req.Stream); err == nil && n > 0 {
+	if userInfo.GetLimitMethod() == "tokens" {
+		if n, err := h.tokenCounter.CountMsgsToken(req.Messages, req.Model, req.Stream); err == nil && n > 0 {
 			reserveAmount = uint64(n)
 		}
 	}
 
-	reservation, err := h.quotaService.Reserve(userInfo, reserveAmount)
+	reservation, err := h.quota.Reserve(userInfo, reserveAmount)
 	if err != nil {
 		c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
 		return
@@ -77,24 +119,24 @@ func (h *RelayHandle) ChatCompletions(c *gin.Context) {
 
 	storeBody := os.Getenv("LOG_STORE_BODY") == "true" || os.Getenv("LOG_STORE_BODY") == "1"
 
-	finishCallback := func(err error, resp *model.ChatResponse) {
+	finishCallback := func(err error, resp *ChatResponse) {
 		if err != nil {
-			_ = h.quotaService.Rollback(userInfo, reservation)
+			_ = h.quota.Rollback(userInfo, reservation)
 		} else {
-			actual := reservation.Amount
-			if resp != nil && userInfo.ApiLimit != nil && userInfo.ApiLimit.LimitMethod == "tokens" {
+			actual := reserveAmount
+			if resp != nil && userInfo.GetLimitMethod() == "tokens" {
 				if resp.Usage.TotalTokens > 0 {
 					actual = uint64(resp.Usage.TotalTokens)
 				}
 			}
-			_ = h.quotaService.Commit(userInfo, reservation, actual)
+			_ = h.quota.Commit(userInfo, reservation, actual)
 		}
 
 		duration := time.Since(startTime).Milliseconds()
-		provider := h.relayService.GetProvider(req.Model)
-		logEntry := &model.LlmLogModel{
-			UserID: userInfo.ID, Duration: duration,
-			Provider: provider, TheModel: req.Model,
+		provider := h.svc(c).GetProvider(req.Model)
+		logEntry := &LogEntry{
+			ProjectID: userInfo.GetProjectID(), UserID: userInfo.GetID(), Duration: duration,
+			Provider: provider, Model: req.Model,
 			ReqTime: time.Now(), ClientIP: c.ClientIP(),
 			UserAgent: c.GetHeader("User-Agent"),
 		}
@@ -117,7 +159,7 @@ func (h *RelayHandle) ChatCompletions(c *gin.Context) {
 			logEntry.ChatID = resp.ID
 			logEntry.AllUsage = resp.Usage
 		}
-		_ = h.logService.CreateLog(logEntry)
+		_ = h.logs.CreateLog(logEntry)
 	}
 
 	if req.Stream {
@@ -128,8 +170,8 @@ func (h *RelayHandle) ChatCompletions(c *gin.Context) {
 }
 
 // handleNonStreamResponse 处理非流式响应
-func (h *RelayHandle) handleNonStreamResponse(c *gin.Context, ctx context.Context, req *model.ChatRequest, callback FinishCallback) {
-	response, err := h.relayService.ChatCompletions(ctx, req)
+func (h *Handler) handleNonStreamResponse(c *gin.Context, ctx context.Context, req *ChatRequest, callback FinishCallback) {
+	response, err := h.svc(c).ChatCompletions(ctx, req)
 	if callback != nil {
 		go callback(err, response)
 	}
@@ -142,20 +184,20 @@ func (h *RelayHandle) handleNonStreamResponse(c *gin.Context, ctx context.Contex
 	c.JSON(http.StatusOK, response)
 }
 
-func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, req *model.ChatRequest, callback FinishCallback) {
+func (h *Handler) handleStreamResponse(c *gin.Context, ctx context.Context, req *ChatRequest, callback FinishCallback) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 	c.Header("X-Accel-Buffering", "no")
 
-	respChan, errorChan := h.relayService.ChatCompletionsStream(ctx, req)
+	respChan, errorChan := h.svc(c).ChatCompletionsStream(ctx, req)
 
 	var streamErr error
 	var accumulatedContent strings.Builder
-	var providerUsage *model.Usage
-	var response = &model.ChatResponse{
-		Object: "chat.completion", Usage: model.Usage{},
-		Model: req.Model, Choices: []model.ChatChoice{},
+	var providerUsage *Usage
+	var response = &ChatResponse{
+		Object: "chat.completion", Usage: Usage{},
+		Model: req.Model, Choices: []ChatChoice{},
 	}
 
 	logAndFinish := func(err error) {
@@ -163,9 +205,9 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 		c.Writer.Flush()
 
 		if callback != nil {
-			response.Choices = append(response.Choices, model.ChatChoice{
+			response.Choices = append(response.Choices, ChatChoice{
 				Index: 0, FinishReason: "stop",
-				Message: model.ChatMessage{
+				Message: ChatMessage{
 					Role: "assistant", Content: accumulatedContent.String(),
 				},
 			})
@@ -173,13 +215,13 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 			if providerUsage != nil && providerUsage.TotalTokens > 0 {
 				response.Usage = *providerUsage
 			} else {
-				promptTokens, _ := h.tokenService.CountMsgsToken(
+				promptTokens, _ := h.tokenCounter.CountMsgsToken(
 					req.Messages, req.Model, true,
 				)
-				completionTokens := h.tokenService.CountTextToken(
+				completionTokens := h.tokenCounter.CountTextToken(
 					accumulatedContent.String(), req.Model,
 				)
-				response.Usage = model.Usage{
+				response.Usage = Usage{
 					PromptTokens:     promptTokens,
 					CompletionTokens: completionTokens,
 					TotalTokens:      promptTokens + completionTokens,
@@ -243,8 +285,8 @@ func (h *RelayHandle) handleStreamResponse(c *gin.Context, ctx context.Context, 
 }
 
 // ListModels OpenAI 兼容的模型列表
-func (h *RelayHandle) ListModels(c *gin.Context) {
-	models := h.relayService.GetModels()
+func (h *Handler) ListModels(c *gin.Context) {
+	models := h.svc(c).GetModels()
 	c.JSON(http.StatusOK, gin.H{
 		"object": "list",
 		"data":   models,

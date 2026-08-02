@@ -19,16 +19,6 @@ var (
 	ErrPaymentCallbackVerification = errors.New("支付回调验证失败")
 )
 
-// Token service errors
-var (
-	ErrDailyTokenLimitReached     = errors.New("已达到每日 Token 限制")
-	ErrMonthlyTokenLimitReached   = errors.New("已达到每月 Token 限制")
-	ErrDailyRequestLimitReached   = errors.New("已达到每日请求限制")
-	ErrMonthlyRequestLimitReached = errors.New("已达到每月请求限制")
-	ErrDailyProjectLimitReached   = errors.New("已达到每日项目限制")
-	ErrMonthlyProjectLimitReached = errors.New("已达到每月项目限制")
-)
-
 // User service errors
 var (
 	ErrUserNotFound           = errors.New("用户不存在")
@@ -118,8 +108,6 @@ var (
 	ErrVerificationCodeGenerationFailed = errors.New("验证码生成失败")
 	ErrInvalidAPIKey                    = errors.New("无效的 API Key")
 	ErrAPIKeyAccountExpired             = errors.New("账户套餐已过期")
-	ErrQuotaNotConfigured               = errors.New("账户未配置用量限制")
-	ErrQuotaExceeded                    = errors.New("已超出用量配额")
 	ErrAppSecretNotConfigured           = errors.New("APP_SECRET 未配置")
 	ErrInvalidToken                     = errors.New("无效的 token")
 	ErrEmailNotRegistered               = errors.New("该邮箱未注册")
@@ -131,13 +119,6 @@ var (
 	ErrTokenExpired                     = errors.New("token已过期")
 	ErrRedisTokenStorageFailed          = errors.New("Redis存储token失败")
 	ErrTempTokenStorageFailed           = errors.New("存储临时token失败")
-)
-
-// Relay service errors
-var (
-	ErrUnsupportedModel      = errors.New("unsupported model")
-	ErrProviderNotConfigured = errors.New("provider not configured")
-	ErrAPIError              = errors.New("API error")
 )
 
 // Mail service errors

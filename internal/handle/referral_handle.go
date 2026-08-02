@@ -19,7 +19,7 @@ func NewReferralHandle() *ReferralHandle {
 }
 
 func (h *ReferralHandle) MyCode(c *gin.Context) {
-	rc, err := h.svc.GetOrCreateCode(c.GetUint64("UserID"))
+	rc, err := h.svc.GetOrCreateCode(service.ProjectID(c), c.GetUint64("UserID"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -28,7 +28,7 @@ func (h *ReferralHandle) MyCode(c *gin.Context) {
 }
 
 func (h *ReferralHandle) Stats(c *gin.Context) {
-	data, err := h.svc.Stats(c.GetUint64("UserID"))
+	data, err := h.svc.Stats(service.ProjectID(c), c.GetUint64("UserID"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -38,7 +38,7 @@ func (h *ReferralHandle) Stats(c *gin.Context) {
 
 func (h *ReferralHandle) Resolve(c *gin.Context) {
 	code := c.Query("code")
-	rc, err := h.svc.ResolveCode(code)
+	rc, err := h.svc.ResolveCode(service.ProjectID(c), code)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"valid": false})
 		return
@@ -55,12 +55,12 @@ func (h *ReferralHandle) LogShare(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	_ = h.svc.LogShare(req.Code, req.Channel, c.ClientIP(), 0)
+	_ = h.svc.LogShare(service.ProjectID(c), req.Code, req.Channel, c.ClientIP(), 0)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 func (h *ReferralHandle) ListCampaigns(c *gin.Context) {
-	list, err := h.svc.ListCampaigns()
+	list, err := h.svc.ListCampaigns(service.ProjectID(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -74,7 +74,7 @@ func (h *ReferralHandle) SaveCampaign(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.svc.SaveCampaign(&camp); err != nil {
+	if err := h.svc.SaveCampaign(service.ProjectID(c), &camp); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -84,7 +84,7 @@ func (h *ReferralHandle) SaveCampaign(c *gin.Context) {
 func (h *ReferralHandle) ListReferrals(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
-	list, total, err := h.svc.ListReferrals(page, size)
+	list, total, err := h.svc.ListReferrals(service.ProjectID(c), page, size)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

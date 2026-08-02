@@ -13,6 +13,7 @@ import (
 	"github.com/OptLTD/member/internal/consts"
 	"github.com/OptLTD/member/internal/model"
 	"github.com/OptLTD/member/internal/support"
+	relay "github.com/OptLTD/member/llm-relay"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -48,9 +49,12 @@ func (s *AuthService) sessionToTokenInfo(session *model.SessionModel) *TokenInfo
 }
 
 // SignIn 用户登录
-func (s *AuthService) SignIn(username, password string) (string, *model.UserModel, error) {
+func (s *AuthService) SignIn(username, password string, projectID uint64) (string, *model.UserModel, error) {
 	user, err := s.userS.GetUserByUsername(username)
 	if err != nil {
+		return "", nil, consts.ErrInvalidCredentials
+	}
+	if projectID > 0 && user.ProjectID != 0 && user.ProjectID != projectID {
 		return "", nil, consts.ErrInvalidCredentials
 	}
 
@@ -91,14 +95,14 @@ func (s *AuthService) SignOut(token string) {
 }
 
 // SignUp 用户注册
-func (s *AuthService) SignUp(req *model.SignUpRequest) (*model.UserModel, error) {
+func (s *AuthService) SignUp(req *model.SignUpRequest, projectID uint64) (*model.UserModel, error) {
 	existingUser, err := s.userS.GetUserByUsername(req.Username)
-	if err == nil && existingUser != nil {
+	if err == nil && existingUser != nil && (projectID == 0 || existingUser.ProjectID == 0 || existingUser.ProjectID == projectID) {
 		return nil, consts.ErrUsernameAlreadyExists
 	}
 
 	existingUser, err = s.userS.GetUserByEmail(req.Email)
-	if err == nil && existingUser != nil {
+	if err == nil && existingUser != nil && (projectID == 0 || existingUser.ProjectID == 0 || existingUser.ProjectID == projectID) {
 		return nil, consts.ErrEmailAlreadyExists
 	}
 
@@ -113,14 +117,14 @@ func (s *AuthService) SignUp(req *model.SignUpRequest) (*model.UserModel, error)
 	}
 
 	setup := NewSetupService()
-	limit, err := setup.GetPlanLimit(model.PlanBasic)
+	limit, err := setup.GetPlanLimit(projectID, model.PlanBasic)
 	if err != nil || limit == nil {
-		limit = DefaultBasicLimit()
+		limit = relay.DefaultBasicLimit()
 	}
 
 	today := time.Now().Format("2006-01-02")
 	user := &model.UserModel{
-		Email: req.Email, Username: req.Username,
+		ProjectID: projectID, Email: req.Email, Username: req.Username,
 		APIKey: support.HashAPIKey(apiKey), Password: string(hashedPassword),
 		UserRole: model.RoleUser, UserPlan: model.PlanBasic,
 		IsActive: true, ApiLimit: limit,
@@ -129,11 +133,14 @@ func (s *AuthService) SignUp(req *model.SignUpRequest) (*model.UserModel, error)
 	if err := s.userS.CreateUser(user); err != nil {
 		return nil, fmt.Errorf("%w: %v", consts.ErrUserCreationFailed, err)
 	}
+	if err := s.userS.CreateQuota(user.ID, &model.ApiUsage{DayStamp: today}, limit); err != nil {
+		return nil, fmt.Errorf("%w: %v", consts.ErrUserCreationFailed, err)
+	}
 	if config.HasModule(config.ModuleReferral) && req.RefCode != "" {
-		_ = NewReferralService().BindReferral(user.ID, req.RefCode)
+		_ = NewReferralService().BindReferral(projectID, user.ID, req.RefCode)
 	}
 	if config.HasModule(config.ModuleAnalytics) {
-		_ = NewAnalyticsService().TrackInternal(user.ID, "user.register", map[string]any{
+		_ = NewAnalyticsService().TrackInternal(projectID, user.ID, "user.register", map[string]any{
 			"refCode": req.RefCode,
 		})
 	}
@@ -169,8 +176,8 @@ func (s *AuthService) VerifySignupCode(code string) error {
 	return nil
 }
 
-func (s *AuthService) GenerateSignupCode(email string) (*model.VerifyModel, error) {
-	reset := &model.VerifyModel{Email: email}
+func (s *AuthService) GenerateSignupCode(projectID uint64, email string) (*model.VerifyModel, error) {
+	reset := &model.VerifyModel{ProjectID: projectID, Email: email}
 	token, err := s.generateToken()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", consts.ErrVerificationCodeGenerationFailed, err)
@@ -232,9 +239,12 @@ func (s *AuthService) generateToken() (string, error) {
 }
 
 // ForgotPassword 忘记密码
-func (s *AuthService) ForgotPassword(email string) (*model.VerifyModel, error) {
+func (s *AuthService) ForgotPassword(projectID uint64, email string) (*model.VerifyModel, error) {
 	user, err := s.userS.GetUserByEmail(email)
 	if err != nil {
+		return nil, consts.ErrEmailNotRegistered
+	}
+	if projectID > 0 && user.ProjectID != 0 && user.ProjectID != projectID {
 		return nil, consts.ErrEmailNotRegistered
 	}
 
@@ -242,7 +252,7 @@ func (s *AuthService) ForgotPassword(email string) (*model.VerifyModel, error) {
 		return nil, fmt.Errorf("用户账户已被禁用")
 	}
 
-	reset := &model.VerifyModel{Email: email}
+	reset := &model.VerifyModel{ProjectID: projectID, Email: email}
 	token, err := s.generateToken()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", consts.ErrResetCodeGenerationFailed, err)
@@ -250,7 +260,7 @@ func (s *AuthService) ForgotPassword(email string) (*model.VerifyModel, error) {
 	reset.Token = token
 	reset.ExpireAt = time.Now().Add(30 * time.Minute)
 
-	s.conn.Where("email = ?", email).Delete(&model.VerifyModel{})
+	s.conn.Where("project_id = ? AND email = ?", projectID, email).Delete(&model.VerifyModel{})
 
 	if res := s.conn.Create(reset); res.Error != nil {
 		return nil, fmt.Errorf("重置码生成失败: %v", res.Error)

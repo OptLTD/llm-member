@@ -31,12 +31,14 @@ import {
 } from '@vicons/ionicons5'
 import { useAuthStore } from '../stores/auth'
 import { useModulesStore } from '../stores/modules'
+import { useProjectsStore } from '../stores/projects'
 import { adminMenuGroups, adminPinnedItems, type AdminMenuItem } from '../config/menu'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const mods = useModulesStore()
+const projects = useProjectsStore()
 const dialog = useDialog()
 
 const iconMap: Record<string, any> = {
@@ -58,7 +60,34 @@ const iconMap: Record<string, any> = {
 
 onMounted(async () => {
   await mods.load()
+  await projects.load()
 })
+
+async function onProjectChange(id: number) {
+  projects.select(id)
+  await mods.load()
+}
+
+const projectMenuOptions = computed(() => [
+  ...projects.projects.map((p) => ({
+    label: p.name,
+    key: `project:${p.id}`,
+  })),
+  { type: 'divider', key: 'divider' },
+  { label: '项目管理', key: 'manage' },
+])
+
+function onProjectMenuSelect(key: string) {
+  if (key === 'manage') {
+    router.push('/projects')
+    return
+  }
+  if (key.startsWith('project:')) {
+    const id = Number(key.slice('project:'.length))
+    if (id > 0) onProjectChange(id)
+  }
+}
+
 
 function renderIcon(name: string) {
   const icon = iconMap[name]
@@ -163,22 +192,22 @@ function logout() {
       <div class="sider-shell">
         <div class="sider-body">
           <div class="brand">
-            <img src="/favicon.svg" alt="" class="brand-icon" />
-            <span>Member Admin</span>
-          </div>
-
-          <div class="pinned-row">
-            <button
-              v-for="item in adminPinnedItems"
-              :key="item.path"
-              type="button"
-              class="pinned-item"
-              :class="{ active: activeKey === item.path }"
-              @click="router.push(item.path)"
+            <div class="brand-left">
+              <img src="/favicon.svg" alt="" class="brand-icon" />
+              <span class="brand-name">Member</span>
+            </div>
+            <n-dropdown
+              v-if="projects.loaded"
+              trigger="click"
+              :options="projectMenuOptions"
+              :value="`project:${projects.currentId}`"
+              @select="onProjectMenuSelect"
             >
-              <n-icon :component="iconMap[item.icon]" :size="18" />
-              <span>{{ item.label }}</span>
-            </button>
+              <span class="brand-project">
+                {{ projects.current()?.name || '选择项目' }}
+                <n-icon size="14"><ChevronDownOutline /></n-icon>
+              </span>
+            </n-dropdown>
           </div>
 
           <n-menu
@@ -193,13 +222,28 @@ function logout() {
         </div>
 
         <div class="sider-footer">
-          <span class="username">{{ auth.username || '管理员' }}</span>
-          <n-button quaternary size="small" @click="logout">
-            <template #icon>
-              <n-icon><LogOutOutline /></n-icon>
-            </template>
-            退出
-          </n-button>
+          <div class="pinned-row">
+            <button
+              v-for="item in adminPinnedItems"
+              :key="item.path"
+              type="button"
+              class="pinned-item"
+              :class="{ active: activeKey === item.path }"
+              @click="router.push(item.path)"
+            >
+              <n-icon :component="iconMap[item.icon]" :size="18" />
+              <span>{{ item.label }}</span>
+            </button>
+          </div>
+          <div class="footer-user">
+            <span class="username">{{ auth.username || '管理员' }}</span>
+            <n-button quaternary size="small" @click="logout">
+              <template #icon>
+                <n-icon><LogOutOutline /></n-icon>
+              </template>
+              退出
+            </n-button>
+          </div>
         </div>
       </div>
     </n-layout-sider>
@@ -208,7 +252,9 @@ function logout() {
       <n-layout-header bordered class="header">
         <div class="header-left">
           <h1 class="header-title">{{ pageTitle }}</h1>
-          <span v-if="pageSubtitle" class="header-subtitle">{{ pageSubtitle }}</span>
+          <span v-if="pageSubtitle" class="header-subtitle">
+            {{ pageSubtitle }}
+          </span>
         </div>
       </n-layout-header>
       <n-layout-content class="content">
@@ -272,25 +318,63 @@ function logout() {
 .brand {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  padding: 20px 18px 16px;
+  padding: 14px 12px;
   color: #f9fafb;
   font-weight: 600;
   font-size: 16px;
 }
 
+.brand-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .brand-icon {
   width: 28px;
   height: 28px;
+  flex-shrink: 0;
+}
+
+.brand-name {
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 600;
+  color: #f9fafb;
+}
+
+.brand-project {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  color: #e5e7eb;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  flex-shrink: 1;
+}
+
+.brand-project:hover {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .pinned-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  padding: 0 12px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  margin-bottom: 6px;
+  padding: 0;
 }
 
 .pinned-item {
@@ -333,13 +417,20 @@ function logout() {
 .sider-footer {
   flex: 0 0 auto;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 14px 16px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: #0f1623;
   z-index: 2;
+}
+
+.footer-user {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px;
 }
 
 .sider-footer :deep(.n-button) {
@@ -377,6 +468,8 @@ function logout() {
   gap: 8px;
   min-width: 0;
 }
+
+
 
 .header-title {
   margin: 0;

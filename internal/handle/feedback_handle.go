@@ -24,7 +24,7 @@ func (h *FeedbackHandle) Submit(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	fb, err := h.svc.Submit(c.GetUint64("UserID"), &req)
+	fb, err := h.svc.Submit(service.ProjectID(c), c.GetUint64("UserID"), &req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -36,7 +36,7 @@ func (h *FeedbackHandle) List(c *gin.Context) {
 	status := c.Query("status")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
-	list, total, err := h.svc.List(status, page, size)
+	list, total, err := h.svc.List(service.ProjectID(c), status, page, size)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -51,7 +51,7 @@ func (h *FeedbackHandle) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	fb, err := h.svc.Update(id, &req)
+	fb, err := h.svc.Update(service.ProjectID(c), id, &req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -60,7 +60,7 @@ func (h *FeedbackHandle) Update(c *gin.Context) {
 }
 
 func (h *FeedbackHandle) Summary(c *gin.Context) {
-	data, err := h.svc.Summary()
+	data, err := h.svc.Summary(service.ProjectID(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

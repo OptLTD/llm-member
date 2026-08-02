@@ -52,7 +52,7 @@ func (h *DeviceHandle) Unbind(c *gin.Context) {
 
 func (h *DeviceHandle) AdminList(c *gin.Context) {
 	userID, _ := strconv.ParseUint(c.DefaultQuery("userId", "0"), 10, 64)
-	devices, err := h.svc.ListByAdmin(userID)
+	devices, err := h.svc.ListByAdmin(service.ProjectID(c), userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

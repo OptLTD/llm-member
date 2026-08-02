@@ -42,6 +42,11 @@ const router = createRouter({
           component: () => import('../views/Settings.vue'),
         },
         {
+          path: 'projects',
+          meta: { title: '项目管理', subtitle: '多项目（租户）管理与切换' },
+          component: () => import('../views/Projects.vue'),
+        },
+        {
           path: 'logs',
           meta: { title: '请求日志', subtitle: 'LLM Relay 调用记录' },
           component: () => import('../views/Logs.vue'),

@@ -20,18 +20,18 @@ func NewCouponService() *CouponService {
 	return &CouponService{db: config.GetDB()}
 }
 
-func (s *CouponService) GetByCode(code string) (*model.CouponModel, error) {
+func (s *CouponService) GetByCode(projectID uint64, code string) (*model.CouponModel, error) {
 	var c model.CouponModel
-	err := s.db.Where("code = ?", strings.ToUpper(strings.TrimSpace(code))).First(&c).Error
+	err := s.db.Where("project_id = ? AND code = ?", projectID, strings.ToUpper(strings.TrimSpace(code))).First(&c).Error
 	return &c, err
 }
 
-func (s *CouponService) Validate(code string, userID uint64, plan model.PayPlan, amount float64) (*model.ValidateCouponResponse, error) {
+func (s *CouponService) Validate(projectID uint64, code string, userID uint64, plan model.PayPlan, amount float64) (*model.ValidateCouponResponse, error) {
 	resp := &model.ValidateCouponResponse{
 		OriginalAmount: amount,
 		FinalAmount:    amount,
 	}
-	coupon, err := s.GetByCode(code)
+	coupon, err := s.GetByCode(projectID, code)
 	if err != nil {
 		resp.Valid = false
 		resp.Message = "券码不存在"
@@ -96,10 +96,10 @@ func (s *CouponService) calcDiscount(coupon *model.CouponModel, amount float64) 
 	}
 }
 
-func (s *CouponService) Redeem(code string, userID uint64, orderID string, discount float64) error {
+func (s *CouponService) Redeem(projectID uint64, code string, userID uint64, orderID string, discount float64) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		var coupon model.CouponModel
-		if err := tx.Where("code = ?", strings.ToUpper(strings.TrimSpace(code))).First(&coupon).Error; err != nil {
+		if err := tx.Where("project_id = ? AND code = ?", projectID, strings.ToUpper(strings.TrimSpace(code))).First(&coupon).Error; err != nil {
 			return err
 		}
 		if coupon.MaxUses > 0 && coupon.UsedCount >= coupon.MaxUses {
@@ -119,8 +119,8 @@ func (s *CouponService) Redeem(code string, userID uint64, orderID string, disco
 	})
 }
 
-func (s *CouponService) RedeemForPlan(code string, userID uint64) error {
-	coupon, err := s.GetByCode(code)
+func (s *CouponService) RedeemForPlan(projectID uint64, code string, userID uint64) error {
+	coupon, err := s.GetByCode(projectID, code)
 	if err != nil {
 		return err
 	}
@@ -144,10 +144,11 @@ func (s *CouponService) RedeemForPlan(code string, userID uint64) error {
 	if err := s.db.Save(user).Error; err != nil {
 		return err
 	}
-	return s.Redeem(code, userID, "", 0)
+	return s.Redeem(projectID, code, userID, "", 0)
 }
 
-func (s *CouponService) Create(coupon *model.CouponModel) error {
+func (s *CouponService) Create(projectID uint64, coupon *model.CouponModel) error {
+	coupon.ProjectID = projectID
 	coupon.Code = strings.ToUpper(strings.TrimSpace(coupon.Code))
 	return s.db.Create(coupon).Error
 }
@@ -165,7 +166,7 @@ func (s *CouponService) Update(id uint64, coupon *model.CouponModel) error {
 	}).Error
 }
 
-func (s *CouponService) List(page, size int) ([]model.CouponModel, int64, error) {
+func (s *CouponService) List(projectID uint64, page, size int) ([]model.CouponModel, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -174,8 +175,12 @@ func (s *CouponService) List(page, size int) ([]model.CouponModel, int64, error)
 	}
 	var total int64
 	var list []model.CouponModel
-	s.db.Model(&model.CouponModel{}).Count(&total)
-	err := s.db.Order("id desc").Offset((page - 1) * size).Limit(size).Find(&list).Error
+	q := s.db.Model(&model.CouponModel{})
+	if projectID > 0 {
+		q = q.Where("project_id = ?", projectID)
+	}
+	q.Count(&total)
+	err := q.Order("id desc").Offset((page - 1) * size).Limit(size).Find(&list).Error
 	return list, total, err
 }
 

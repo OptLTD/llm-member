@@ -149,13 +149,23 @@ const Utils = {
     }, 5000);
   },
 
+  // 从 URL query 读取项目标识（?project=slug 或 ?project=id），供多租户请求使用
+  projectHeader() {
+    const q = new URLSearchParams(window.location.search);
+    const p = q.get("project") || "";
+    if (!p) return {};
+    return /^\d+$/.test(p) ? { "X-Project-Id": p } : { "X-Project-Slug": p };
+  },
+
   // API 请求封装
   async apiRequest(url, options = {}) {
     const token = localStorage.getItem("userToken");
+    const projectHeader = this.projectHeader();
     const defaultOptions = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...projectHeader,
         ...(token && { Authorization: `Bearer ${token}` }),
       },
     };

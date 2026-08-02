@@ -7,6 +7,10 @@ http.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  const projectId = localStorage.getItem('projectId')
+  if (projectId && Number(projectId) > 0) {
+    config.headers['X-Project-Id'] = projectId
+  }
   return config
 })
 

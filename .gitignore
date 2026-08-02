@@ -5,5 +5,6 @@
 /storage
 __debug*
 __pycache__
-ui-admin/node_modules
 ui-admin/dist
+ui-admin/node_modules
+ui-front/admin/dist

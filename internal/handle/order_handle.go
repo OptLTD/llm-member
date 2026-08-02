@@ -147,6 +147,7 @@ func (h *OrderHandler) CreatePaymentOrder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户信息失败"})
 		return
 	}
+	req.ProjectID = user.ProjectID // 注入项目
 	// if user.ExpireAt != nil && user.ExpireAt.After(time.Now()) {
 	// 	c.JSON(http.StatusOK, gin.H{"error": "您已订阅套餐，不能重复订阅",
 	// 		"plan": user.UserPlan, "expireAt": user.ExpireAt,
@@ -155,7 +156,7 @@ func (h *OrderHandler) CreatePaymentOrder(c *gin.Context) {
 	// }
 
 	plan := model.PlanInfo{Plan: string(req.PayPlan)}
-	if err = h.setupService.GetAsTarget("plan."+plan.Plan, &plan); err != nil {
+	if err = h.setupService.GetAsTarget(user.ProjectID, "plan."+plan.Plan, &plan); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取套餐价格失败"})
 		return
 	}
@@ -163,7 +164,7 @@ func (h *OrderHandler) CreatePaymentOrder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "该套餐暂不可用"})
 		return
 	}
-	if _, err = h.setupService.GetPlanLimit(req.PayPlan); err != nil {
+	if _, err = h.setupService.GetPlanLimit(user.ProjectID, req.PayPlan); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "该套餐暂不可用"})
 		return
 	}
@@ -206,7 +207,7 @@ func (h *OrderHandler) QueryPaymentOrder(c *gin.Context) {
 	currStatus := order.Status
 	err = h.orderService.QueryPayment(order)
 	if err == nil && currStatus != order.Status {
-		limit, _ := h.setupService.GetPlanLimit(order.PayPlan)
+		limit, _ := h.setupService.GetPlanLimit(order.ProjectID, order.PayPlan)
 		err := h.orderService.PaySuccess(c.Param("id"), limit)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

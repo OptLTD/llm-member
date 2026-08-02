@@ -5,17 +5,21 @@ import (
 	"github.com/OptLTD/member/internal/config"
 	"github.com/OptLTD/member/internal/handle"
 	"github.com/OptLTD/member/internal/service"
+	relay "github.com/OptLTD/member/llm-relay"
 
 	"github.com/gin-gonic/gin"
 )
 
 func Register(r *gin.Engine, authService *service.AuthService) {
+	projectSvc := service.NewProjectService()
+	projectMiddle := service.ProjectMiddleware(projectSvc)
+
 	authMiddle := auth.AuthMiddleware(authService)
 	adminMiddle := auth.AdminMiddleware(authService)
 	keyMiddle := auth.APIKeyMiddleware(authService)
 	noneMiddle := auth.NoneMiddleware()
 
-	v1 := r.Group("/v1")
+	v1 := r.Group("/v1", projectMiddle)
 	{
 		authHandle := handle.NewAuthHandle(authService)
 		v1.POST("/build-token", authMiddle, authHandle.BuildCallbackToken)
@@ -25,12 +29,24 @@ func Register(r *gin.Engine, authService *service.AuthService) {
 			auth.RequireAnyModule(config.ModuleMember, config.ModuleLLMRelay),
 			authHandle.GetUserProfile)
 
-		relayHandle := handle.NewRelayHandle()
+		relayBase := relay.NewService(relay.ConfigFromEnv)
+		relayHandle := relay.NewHandler(
+			relayBase,
+			relay.NewQuotaService(config.GetDB(), config.GetRedis()),
+			relay.NewGormLogger(config.GetDB()),
+			relay.HandlerWithServiceFor(func(c *gin.Context) *relay.Service {
+				cfg := projectSvc.LLMConfig(service.ProjectID(c))
+				if cfg == nil {
+					cfg = relay.ConfigFromEnv()
+				}
+				return relayBase.WithConfig(cfg)
+			}),
+		)
 		v1.GET("/models", keyMiddle, auth.RequireModule(config.ModuleLLMRelay), relayHandle.ListModels)
 		v1.POST("/chat/completions", keyMiddle, auth.RequireModule(config.ModuleLLMRelay), relayHandle.ChatCompletions)
 	}
 
-	api := r.Group("/api")
+	api := r.Group("/api", projectMiddle)
 	{
 		rootApi := api.Group("/", noneMiddle)
 		{
@@ -100,6 +116,14 @@ func Register(r *gin.Engine, authService *service.AuthService) {
 
 		adminApi := api.Group("/admin", adminMiddle)
 		{
+			ph := handle.NewProjectHandle()
+			adminApi.GET("/projects", ph.List)
+			adminApi.GET("/projects/current", ph.Current)
+			adminApi.POST("/projects", ph.Create)
+			adminApi.PUT("/projects/:id", ph.Update)
+			adminApi.DELETE("/projects/:id", ph.Delete)
+			adminApi.PUT("/projects/:id/settings", ph.SaveSettings)
+
 			h := handle.NewAdminHandle()
 			adminApi.GET("/modules", h.GetModules)
 			adminApi.GET("/system", h.GetSystemInfo)

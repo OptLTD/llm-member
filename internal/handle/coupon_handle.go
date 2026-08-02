@@ -24,7 +24,7 @@ func (h *CouponHandle) Validate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	resp, err := h.svc.Validate(req.Code, c.GetUint64("UserID"), req.PayPlan, req.Amount)
+	resp, err := h.svc.Validate(service.ProjectID(c), req.Code, c.GetUint64("UserID"), req.PayPlan, req.Amount)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -38,7 +38,7 @@ func (h *CouponHandle) Redeem(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.svc.RedeemForPlan(req.Code, c.GetUint64("UserID")); err != nil {
+	if err := h.svc.RedeemForPlan(service.ProjectID(c), req.Code, c.GetUint64("UserID")); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -48,7 +48,7 @@ func (h *CouponHandle) Redeem(c *gin.Context) {
 func (h *CouponHandle) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
-	list, total, err := h.svc.List(page, size)
+	list, total, err := h.svc.List(service.ProjectID(c), page, size)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -62,7 +62,7 @@ func (h *CouponHandle) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.svc.Create(&coupon); err != nil {
+	if err := h.svc.Create(service.ProjectID(c), &coupon); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

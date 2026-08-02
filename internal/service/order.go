@@ -60,7 +60,7 @@ func (s *OrderService) CreateOrder(req *model.OrderRequest, plan *model.PlanInfo
 	couponCode := ""
 	if config.HasModule(config.ModuleCoupon) && req.CouponCode != "" {
 		couponSvc := NewCouponService()
-		valid, err := couponSvc.Validate(req.CouponCode, *req.UserId, req.PayPlan, amount)
+		valid, err := couponSvc.Validate(req.ProjectID, req.CouponCode, *req.UserId, req.PayPlan, amount)
 		if err != nil {
 			return nil, err
 		}
@@ -72,8 +72,9 @@ func (s *OrderService) CreateOrder(req *model.OrderRequest, plan *model.PlanInfo
 		couponCode = req.CouponCode
 	}
 	order := &model.OrderModel{
-		UserID:  *req.UserId,
-		PayPlan: req.PayPlan, Amount: amount,
+		ProjectID: req.ProjectID,
+		UserID:    *req.UserId,
+		PayPlan:   req.PayPlan, Amount: amount,
 		DiscountAmount: discount,
 		CouponCode:     couponCode,
 		Method:         req.Method, Status: model.PaymentPending,
@@ -202,9 +203,9 @@ func (s *OrderService) PaySuccess(orderId string, limit *model.ApiLimit) error {
 		return fmt.Errorf("%w: %v", consts.ErrOrderStatusUpdateFailed, err)
 	}
 
-	// 更新用户套餐
+	// 更新用户套餐（配额 limit 写入独立表）
 	var updateUser = map[string]any{
-		"user_plan": order.PayPlan, "api_limit": limit,
+		"user_plan": order.PayPlan,
 		"expire_at": time.Now().AddDate(0, 0, limit.ExpireDays),
 	}
 	var query = tx.Model(&model.UserModel{}).Where("id = ?", order.UserID)
@@ -212,17 +213,23 @@ func (s *OrderService) PaySuccess(orderId string, limit *model.ApiLimit) error {
 		tx.Rollback()
 		return fmt.Errorf("%w: %v", consts.ErrUserPlanUpdateFailed, err)
 	}
+	if err := tx.Model(&model.UserQuotaModel{}).
+		Where("user_id = ?", order.UserID).
+		Update("api_limit", limit).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("%w: %v", consts.ErrUserPlanUpdateFailed, err)
+	}
 
 	tx.Commit()
 
 	if config.HasModule(config.ModuleCoupon) && order.CouponCode != "" {
-		_ = NewCouponService().Redeem(order.CouponCode, order.UserID, order.OrderID, order.DiscountAmount)
+		_ = NewCouponService().Redeem(order.ProjectID, order.CouponCode, order.UserID, order.OrderID, order.DiscountAmount)
 	}
 	if config.HasModule(config.ModuleReferral) {
-		_ = NewReferralService().OnPaymentSuccess(order.UserID)
+		_ = NewReferralService().OnPaymentSuccess(order.ProjectID, order.UserID)
 	}
 	if config.HasModule(config.ModuleAnalytics) {
-		_ = NewAnalyticsService().TrackInternal(order.UserID, "order.paid", map[string]any{
+		_ = NewAnalyticsService().TrackInternal(order.ProjectID, order.UserID, "order.paid", map[string]any{
 			"orderId": order.OrderID,
 			"plan":    order.PayPlan,
 			"amount":  order.Amount,
@@ -231,13 +238,17 @@ func (s *OrderService) PaySuccess(orderId string, limit *model.ApiLimit) error {
 	return nil
 }
 
-// GetAllOrders 获取用户订单列表
-func (s *OrderService) QueryOrders(req *model.PaginateRequest) (*model.PaginateResponse, error) {
+// GetAllOrders 获取用户订单列表（按项目过滤）
+func (s *OrderService) QueryOrders(req *model.PaginateRequest, projectID uint64) (*model.PaginateResponse, error) {
 	var total int64
 	var orders []model.OrderModel
 
 	query := s.db.Model(&model.OrderModel{})
-	query.Where(req.Query).Order("created_at DESC")
+	query.Where(req.Query)
+	if projectID > 0 {
+		query = query.Where("project_id = ?", projectID)
+	}
+	query = query.Order("created_at DESC")
 	if err := query.Count(&total).Error; err != nil {
 		return nil, err
 	}

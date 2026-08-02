@@ -10,16 +10,17 @@ import (
 	"github.com/OptLTD/member/internal/model"
 	"github.com/OptLTD/member/internal/service"
 	"github.com/OptLTD/member/internal/support"
+	relay "github.com/OptLTD/member/llm-relay"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AdminHandle struct {
+	relayService *relay.Service
 	logService   *service.LogService
 	userService  *service.UserService
 	orderService *service.OrderService
-	relayService *service.RelayService
 	setupService *service.SetupService
 	statsService *service.StatsService
 }
@@ -29,7 +30,7 @@ func NewAdminHandle() *AdminHandle {
 		logService:   service.NewLogService(),
 		userService:  service.NewUserService(),
 		orderService: service.NewOrderService(),
-		relayService: service.NewRelayService(),
+		relayService: relay.NewService(relay.ConfigFromEnv),
 		setupService: service.NewSetupService(),
 		statsService: service.NewStatsService(),
 	}
@@ -55,24 +56,30 @@ func (h *AdminHandle) CreateUser(c *gin.Context) {
 		return
 	}
 
-	limit := service.DefaultBasicLimit()
-	if l, e := h.setupService.GetPlanLimit(model.PlanBasic); e == nil && l != nil {
+	limit := relay.DefaultBasicLimit()
+	pid := service.ProjectID(c)
+	if l, e := h.setupService.GetPlanLimit(pid, model.PlanBasic); e == nil && l != nil {
 		limit = l
 	}
 
 	user := &model.UserModel{
-		Username: req.Username,
-		Email:    req.Email,
-		Password: string(hashedPassword),
-		APIKey:   support.HashAPIKey(plainKey),
-		IsActive: true,
-		Verified: true,
-		UserRole: model.RoleUser,
-		UserPlan: model.PlanBasic,
-		ApiLimit: limit,
-		ApiUsage: &model.ApiUsage{DayStamp: time.Now().Format("2006-01-02")},
+		ProjectID: pid,
+		Username:  req.Username,
+		Email:     req.Email,
+		Password:  string(hashedPassword),
+		APIKey:    support.HashAPIKey(plainKey),
+		IsActive:  true,
+		Verified:  true,
+		UserRole:  model.RoleUser,
+		UserPlan:  model.PlanBasic,
+		ApiLimit:  limit,
+		ApiUsage:  &model.ApiUsage{DayStamp: time.Now().Format("2006-01-02")},
 	}
 	if err := h.userService.CreateUser(user); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.userService.CreateQuota(user.ID, &model.ApiUsage{DayStamp: time.Now().Format("2006-01-02")}, limit); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -92,6 +99,11 @@ func (h *AdminHandle) UpdateUser(c *gin.Context) {
 		return
 	}
 
+	pid := service.ProjectID(c)
+	if err := h.userService.EnsureUserInProject(userID, pid); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	req.UserId = userID
 	if user, err := h.userService.UpdateUser(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -106,6 +118,10 @@ func (h *AdminHandle) UpdateUser(c *gin.Context) {
 // RegenerateAPIKey 重新生成用户 API Key
 func (h *AdminHandle) GenerateAPIKey(c *gin.Context) {
 	userID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err := h.userService.EnsureUserInProject(userID, service.ProjectID(c)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	user, err := h.userService.RegenerateKey(userID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -120,6 +136,10 @@ func (h *AdminHandle) GenerateAPIKey(c *gin.Context) {
 // DeleteUser 删除用户（管理员功能）
 func (h *AdminHandle) DeleteUser(c *gin.Context) {
 	userID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err := h.userService.EnsureUserInProject(userID, service.ProjectID(c)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	if err := h.userService.DeleteUser(userID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -138,6 +158,10 @@ func (h *AdminHandle) ToggleUserStatus(c *gin.Context) {
 		return
 	}
 
+	if err := h.userService.EnsureUserInProject(uint64(userID), service.ProjectID(c)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	if err := h.userService.ToggleUserStatus(uint(userID), req.IsActive); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -172,15 +196,20 @@ func (h *AdminHandle) IssueMyAPIKey(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"apiKey": user.APIKey})
 }
 
-// GetModels 获取可用模型
+// GetModels 获取可用模型（按当前项目 LLM 配置）
 func (h *AdminHandle) GetModels(c *gin.Context) {
-	models := h.relayService.GetModels()
+	cfg := service.NewProjectService().LLMConfig(service.ProjectID(c))
+	svc := h.relayService
+	if cfg != nil {
+		svc = h.relayService.WithConfig(cfg)
+	}
+	models := svc.GetModels()
 	c.JSON(http.StatusOK, gin.H{"data": models})
 }
 
 // GetStats 获取统计信息
 func (h *AdminHandle) GetStats(c *gin.Context) {
-	stats, err := h.statsService.GetStats()
+	stats, err := h.statsService.GetStats(service.ProjectID(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -205,8 +234,8 @@ func (h *AdminHandle) GetLogs(c *gin.Context) {
 		req.Size = 10
 	}
 
-	// 调用服务层方法
-	response, err := h.logService.GetLogs(&req)
+	// 调用服务层方法（按当前项目过滤）
+	response, err := h.logService.GetLogs(&req, service.ProjectID(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -230,8 +259,8 @@ func (h *AdminHandle) GetUsers(c *gin.Context) {
 		req.Size = 10
 	}
 
-	// 调用服务层方法
-	response, err := h.userService.QueryUsers(&req)
+	// 调用服务层方法（按当前项目过滤）
+	response, err := h.userService.QueryUsers(&req, service.ProjectID(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -255,8 +284,8 @@ func (h *AdminHandle) GetOrders(c *gin.Context) {
 		req.Size = 10
 	}
 
-	// 调用服务层方法
-	response, err := h.orderService.QueryOrders(&req)
+	// 调用服务层方法（按当前项目过滤）
+	response, err := h.orderService.QueryOrders(&req, service.ProjectID(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

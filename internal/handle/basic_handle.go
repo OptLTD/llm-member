@@ -129,7 +129,7 @@ func (h *BasicHandle) RegenerateKey(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"apiKey": user.APIKey,
+		"apiKey":  user.APIKey,
 		"message": "API密钥重新生成成功",
 	})
 }

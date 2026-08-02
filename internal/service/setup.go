@@ -9,10 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OptLTD/member/internal/config"
+	cfgPkg "github.com/OptLTD/member/internal/config"
 	"github.com/OptLTD/member/internal/consts"
 	"github.com/OptLTD/member/internal/model"
 	"github.com/OptLTD/member/internal/support"
+	relay "github.com/OptLTD/member/llm-relay"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -21,20 +22,38 @@ import (
 type SetupService struct {
 	db *gorm.DB
 
-	cfg *config.Config
+	cfg *cfgPkg.Config
 }
 
 func NewSetupService() *SetupService {
-	return &SetupService{db: config.GetDB()}
+	return &SetupService{db: cfgPkg.GetDB()}
 }
 
 func HandleInit() error {
 	s := &SetupService{
-		db:  config.GetDB(),
-		cfg: config.Load(),
+		db:  cfgPkg.GetDB(),
+		cfg: cfgPkg.Load(),
+	}
+	// 先清理索引（旧单列唯一索引 + 旧复合索引），再 AutoMigrate 重建
+	if err := s.dropIndexes(); err != nil {
+		log.Println("[SETUP] drop indexes:", err)
 	}
 	if err := s.autoMigration(); err != nil {
 		return fmt.Errorf("%w: %v", consts.ErrDatabaseMigrationFailed, err)
+	}
+	// 用原生 SQL 建按项目复合唯一索引（gorm AutoMigrate 不负责唯一性）
+	if err := s.ensureUniqueIndexes(); err != nil {
+		log.Println("[SETUP] ensure unique indexes:", err)
+	}
+
+	defaultProject, err := NewProjectService().GetDefault()
+	if err != nil {
+		return fmt.Errorf("failed to init default project: %v", err)
+	}
+
+	// 旧库迁移：把旧数据归入默认项目
+	if err := s.migrateProjectData(defaultProject.ID); err != nil {
+		return fmt.Errorf("failed to migrate project data: %v", err)
 	}
 
 	if err := s.initDefaultConfigs(); err != nil {
@@ -48,7 +67,10 @@ func HandleInit() error {
 	if err := s.createDefaultAdmin(); err != nil {
 		return fmt.Errorf("%w: %v", consts.ErrCreateDefaultAdminFailed, err)
 	}
-	if err := config.InitRedis(s.cfg.Redis); err != nil {
+	if err := s.migrateQuotaFromUser(); err != nil {
+		log.Println("[SETUP] migrate quota failed:", err)
+	}
+	if err := cfgPkg.InitRedis(s.cfg.Redis); err != nil {
 		log.Println("Failed to initialize redis:", err)
 	}
 	if err := EnsureDefaultSite(); err != nil {
@@ -57,54 +79,55 @@ func HandleInit() error {
 	return nil
 }
 
-// GetConfig 获取配置项
-func (s *SetupService) GetConfig(key string) (*model.ConfigModel, error) {
+// GetConfig 获取配置项（按项目）
+func (s *SetupService) GetConfig(projectID uint64, key string) (*model.ConfigModel, error) {
 	var config model.ConfigModel
-	err := s.db.Where("`key` = ?", key).First(&config).Error
+	err := s.db.Where("project_id = ? AND "+cfgPkg.QuoteIdent(s.db, "key")+" = ?", projectID, key).First(&config).Error
 	return &config, err
 }
 
-// GetByKind 获取指定分类的所有配置
-func (s *SetupService) GetByKind(kind string) ([]model.ConfigModel, error) {
+// GetByKind 获取指定分类的所有配置（按项目）
+func (s *SetupService) GetByKind(projectID uint64, kind string) ([]model.ConfigModel, error) {
 	var configs []model.ConfigModel
-	err := s.db.Where("kind = ?", kind).Find(&configs).Error
+	err := s.db.Where("project_id = ? AND kind = ?", projectID, kind).Find(&configs).Error
 	return configs, err
 }
 
-// GetConfigValue 获取配置值
-func (s *SetupService) GetConfigValue(key string) (string, error) {
-	config, err := s.GetConfig(key)
+// GetConfigValue 获取配置值（按项目）
+func (s *SetupService) GetConfigValue(projectID uint64, key string) (string, error) {
+	config, err := s.GetConfig(projectID, key)
 	if err != nil {
 		return "", err
 	}
 	return config.Data, nil
 }
 
-// GetAsTarget 获取配置值并解析为JSON
-func (s *SetupService) GetAsTarget(key string, target any) error {
-	value, err := s.GetConfigValue(key)
+// GetAsTarget 获取配置值并解析为JSON（按项目）
+func (s *SetupService) GetAsTarget(projectID uint64, key string, target any) error {
+	value, err := s.GetConfigValue(projectID, key)
 	if err != nil {
 		return err
 	}
 	return json.Unmarshal([]byte(value), target)
 }
 
-func (s *SetupService) SetConfig(config *model.ConfigModel) error {
+func (s *SetupService) SetConfig(projectID uint64, config *model.ConfigModel) error {
 	var existing model.ConfigModel
-	err := s.db.Where("`key` = ?", config.Key).First(&existing).Error
+	err := s.db.Where("project_id = ? AND "+cfgPkg.QuoteIdent(s.db, "key")+" = ?", projectID, config.Key).First(&existing).Error
 
 	if err == gorm.ErrRecordNotFound {
+		config.ProjectID = projectID
 		return s.db.Create(config).Error
 	} else if err != nil {
 		return err
 	}
 	existing.Data = config.Data
-	return s.db.Save(existing).Error
+	return s.db.Save(&existing).Error
 }
 
-// DeleteConfig 删除配置项
-func (s *SetupService) DeleteConfig(key string) error {
-	return s.db.Where("`key` = ?", key).Delete(&model.ConfigModel{}).Error
+// DeleteConfig 删除配置项（按项目）
+func (s *SetupService) DeleteConfig(projectID uint64, key string) error {
+	return s.db.Where("project_id = ? AND "+cfgPkg.QuoteIdent(s.db, "key")+" = ?", projectID, key).Delete(&model.ConfigModel{}).Error
 }
 
 // GetAllConfigs 获取所有配置
@@ -115,12 +138,12 @@ func (s *SetupService) GetAllConfigs() ([]model.ConfigModel, error) {
 }
 
 // GetAllPlans 获取所有付费方案配置
-func (s *SetupService) GetAllPlans() []model.PlanInfo {
+func (s *SetupService) GetAllPlans(projectID uint64) []model.PlanInfo {
 	var plans []model.PlanInfo
 	keys := []string{"basic", "extra", "ultra", "super"}
 	for _, key := range keys {
 		plan := model.PlanInfo{Plan: key}
-		err := s.GetAsTarget("plan."+key, &plan)
+		err := s.GetAsTarget(projectID, "plan."+key, &plan)
 		if err != nil {
 			continue
 		}
@@ -130,12 +153,12 @@ func (s *SetupService) GetAllPlans() []model.PlanInfo {
 }
 
 // GetEnablePlans 获取已启用付费方案配置
-func (s *SetupService) GetEnablePlans() []model.PlanInfo {
+func (s *SetupService) GetEnablePlans(projectID uint64) []model.PlanInfo {
 	var plans []model.PlanInfo
 	keys := []string{"basic", "extra", "ultra", "super"}
 	for _, key := range keys {
 		plan := model.PlanInfo{Plan: key}
-		err := s.GetAsTarget("plan."+key, &plan)
+		err := s.GetAsTarget(projectID, "plan."+key, &plan)
 		if err != nil || !plan.Enabled {
 			continue
 		}
@@ -242,23 +265,25 @@ func (s *SetupService) ParsePlanLimit(plan *model.PlanInfo) (*model.ApiLimit, er
 }
 func (s *SetupService) autoMigration() error {
 	models := []any{
+		&model.ProjectModel{},
 		&model.UserModel{},
+		&model.UserQuotaModel{},
 		&model.VerifyModel{},
 		&model.SessionModel{},
 		&model.OrderModel{},
 		&model.LlmLogModel{},
 		&model.ConfigModel{},
 	}
-	if config.HasModule(config.ModuleDevice) {
+	if cfgPkg.HasModule(cfgPkg.ModuleDevice) {
 		models = append(models, &model.DeviceModel{})
 	}
-	if config.HasModule(config.ModuleAnalytics) {
+	if cfgPkg.HasModule(cfgPkg.ModuleAnalytics) {
 		models = append(models, &model.SiteModel{}, &model.EventModel{}, &model.EventDailyModel{})
 	}
-	if config.HasModule(config.ModuleCoupon) {
+	if cfgPkg.HasModule(cfgPkg.ModuleCoupon) {
 		models = append(models, &model.CouponModel{}, &model.CouponUsageModel{})
 	}
-	if config.HasModule(config.ModuleReferral) {
+	if cfgPkg.HasModule(cfgPkg.ModuleReferral) {
 		models = append(models,
 			&model.ReferralCodeModel{},
 			&model.ReferralModel{},
@@ -266,14 +291,14 @@ func (s *SetupService) autoMigration() error {
 			&model.ShareLogModel{},
 		)
 	}
-	if config.HasModule(config.ModuleSurvey) {
+	if cfgPkg.HasModule(cfgPkg.ModuleSurvey) {
 		models = append(models,
 			&model.SurveyModel{},
 			&model.SurveyQuestionModel{},
 			&model.SurveyResponseModel{},
 		)
 	}
-	if config.HasModule(config.ModuleFeedback) {
+	if cfgPkg.HasModule(cfgPkg.ModuleFeedback) {
 		models = append(models, &model.FeedbackModel{})
 	}
 	return s.db.AutoMigrate(models...)
@@ -337,10 +362,11 @@ func (s *SetupService) createDefaultAdmin() error {
 	}
 
 	// build plan limit
-	if limit, err := s.GetPlanLimit(model.PlanSuper); err == nil {
+	defaultProject, _ := NewProjectService().GetDefault()
+	if limit, err := s.GetPlanLimit(defaultProject.ID, model.PlanSuper); err == nil {
 		admin.ApiLimit, admin.UserPlan = limit, model.PlanSuper
 	} else {
-		admin.ApiLimit = DefaultBasicLimit()
+		admin.ApiLimit = relay.DefaultBasicLimit()
 		admin.ApiLimit.DailyRequests = 100000
 		admin.ApiLimit.MonthlyRequests = 1000000
 		log.Println("GetPlanLimit error: ", err)
@@ -350,13 +376,20 @@ func (s *SetupService) createDefaultAdmin() error {
 	if err := s.db.Create(&admin).Error; err != nil {
 		return fmt.Errorf("%w: %v", consts.ErrCreateAdminUserFailed, err)
 	}
+	if err := s.db.Create(&model.UserQuotaModel{
+		UserID:   admin.ID,
+		ApiUsage: &model.ApiUsage{DayStamp: time.Now().Format("2006-01-02")},
+		ApiLimit: admin.ApiLimit,
+	}).Error; err != nil {
+		return fmt.Errorf("%w: %v", consts.ErrCreateAdminUserFailed, err)
+	}
 	log.Printf("[SETUP] Default admin created, API Key: %s", plainKey)
 	return nil
 }
 
-func (s *SetupService) GetPlanLimit(name model.PayPlan) (*model.ApiLimit, error) {
+func (s *SetupService) GetPlanLimit(projectID uint64, name model.PayPlan) (*model.ApiLimit, error) {
 	plan := &model.PlanInfo{Plan: string(name)}
-	if err := s.GetAsTarget("plan."+plan.Plan, plan); err != nil {
+	if err := s.GetAsTarget(projectID, "plan."+plan.Plan, plan); err != nil {
 		log.Println("[SETUP] GetAsTarget error: ", err.Error())
 		return nil, fmt.Errorf("%w: %s", consts.ErrPlanNotFound, plan.Plan)
 	}
@@ -377,7 +410,7 @@ func (s *SetupService) GetDefaultPlan() []model.PlanInfo {
 		{
 			Plan: "basic", Name: "体验版",
 			Period: "1d", Usage: "1k tokens",
-			Brief: "适合个人用户和小型项目",
+			Brief:      "适合个人用户和小型项目",
 			MaxDevices: 1, QuotaType: "tokens",
 			Features: []string{
 				"100万 tokens/月",
@@ -430,51 +463,196 @@ func (s *SetupService) GetDefaultPlan() []model.PlanInfo {
 	return planInfo
 }
 
+// migrateQuotaFromUser 一次性迁移：为已有用户（llm_user 旧列有配额数据）创建独立配额表记录
+// dropIndexes 删除旧版索引，让 AutoMigrate 按新模型重建。
+// 包含旧版本的单列全局唯一索引（gorm 默认名 idx_<table>_<column>）以及
+// 之前已创建的按项目复合唯一索引；不存在时忽略。
+func (s *SetupService) dropIndexes() error {
+	drops := []struct {
+		model any
+		name  string
+	}{
+		// 旧单列唯一索引
+		{&model.ConfigModel{}, "idx_llm_cfg_key"},
+		{&model.CouponModel{}, "idx_member_coupon_code"},
+		{&model.SiteModel{}, "idx_member_site_site_key"},
+		{&model.ReferralCodeModel{}, "idx_member_referral_code_code"},
+		{&model.ReferralCodeModel{}, "idx_member_referral_code_user_id"},
+		{&model.ReferralModel{}, "idx_member_referral_invitee_id"},
+		// 新复合索引（AutoMigrate 会重建）
+		{&model.ConfigModel{}, "uidx_cfg_project_key"},
+		{&model.CouponModel{}, "uidx_coupon_project_code"},
+		{&model.SiteModel{}, "uidx_site_project_key"},
+		{&model.ReferralCodeModel{}, "uidx_refcode_project_user"},
+		{&model.ReferralCodeModel{}, "uidx_refcode_project_code"},
+		{&model.ReferralModel{}, "uidx_ref_project_invitee"},
+	}
+	for _, d := range drops {
+		if err := s.db.Migrator().DropIndex(d.model, d.name); err != nil {
+			// 索引不存在（新库）或方言不支持时忽略
+			log.Printf("[SETUP] drop index %s ignored: %v", d.name, err)
+		}
+	}
+	return nil
+}
+
+// ensureUniqueIndexes 用原生 SQL 创建按项目复合唯一索引（方言兼容）。
+// gorm 模型上唯一性已降为普通索引，唯一约束由这里显式保障。
+func (s *SetupService) ensureUniqueIndexes() error {
+	keyQ := cfgPkg.QuoteIdent(s.db, "key")
+	projectQ := cfgPkg.QuoteIdent(s.db, "project_id")
+	type idx struct {
+		table string
+		name  string
+		cols  string
+	}
+	idxs := []idx{
+		{"llm_cfg", "uidx_cfg_project_key", projectQ + ", " + keyQ},
+		{"member_coupon", "uidx_coupon_project_code", projectQ + ", " + cfgPkg.QuoteIdent(s.db, "code")},
+		{"member_site", "uidx_site_project_key", projectQ + ", " + cfgPkg.QuoteIdent(s.db, "site_key")},
+		{"member_referral_code", "uidx_refcode_project_user", projectQ + ", " + cfgPkg.QuoteIdent(s.db, "user_id")},
+		{"member_referral_code", "uidx_refcode_project_code", projectQ + ", " + cfgPkg.QuoteIdent(s.db, "code")},
+		{"member_referral", "uidx_ref_project_invitee", projectQ + ", " + cfgPkg.QuoteIdent(s.db, "invitee_id")},
+	}
+	for _, i := range idxs {
+		sql := "CREATE UNIQUE INDEX IF NOT EXISTS " + cfgPkg.QuoteIdent(s.db, i.name) +
+			" ON " + cfgPkg.QuoteIdent(s.db, i.table) + " (" + i.cols + ")"
+		if err := s.db.Exec(sql).Error; err != nil {
+			log.Printf("[SETUP] create index %s ignored: %v", i.name, err)
+		}
+	}
+	return nil
+}
+
+// migrateProjectData 把 project_id=0 的存量数据归入默认项目。
+// llm_cfg 仅迁移套餐配置（plan.*），模块开关 app.modules 保持全局（project_id=0）。
+func (s *SetupService) migrateProjectData(defaultProjectID uint64) error {
+	if defaultProjectID == 0 {
+		return nil
+	}
+	// 通用租户表：全部归入默认项目
+	tables := []string{
+		"llm_user", "llm_user_quota", "llm_order", "llm_log",
+		"member_device", "member_site", "member_event", "member_event_daily",
+		"member_coupon", "member_coupon_usage",
+		"member_referral_code", "member_referral", "member_campaign", "member_share_log",
+		"member_survey", "member_survey_question", "member_survey_response",
+		"member_feedback", "llm_verify",
+	}
+	for _, t := range tables {
+		if err := s.db.Exec(
+			"UPDATE "+cfgPkg.QuoteIdent(s.db, t)+" SET project_id = ? WHERE project_id = 0 OR project_id IS NULL",
+			defaultProjectID,
+		).Error; err != nil {
+			log.Printf("[SETUP] migrate table %s ignored: %v", t, err)
+		}
+	}
+	// 配置表：仅套餐配置归默认项目，模块开关保持全局
+	if err := s.db.Exec(
+		"UPDATE "+cfgPkg.QuoteIdent(s.db, "llm_cfg")+" SET project_id = ? WHERE (project_id = 0 OR project_id IS NULL) AND kind = 'plan'",
+		defaultProjectID,
+	).Error; err != nil {
+		log.Printf("[SETUP] migrate llm_cfg plan ignored: %v", err)
+	}
+	return nil
+}
+
+func (s *SetupService) migrateQuotaFromUser() error {
+	// 新库无旧列，直接跳过；旧库 llm_user 存在 api_usage/api_limit 时才迁移
+	if !s.db.Migrator().HasColumn(&model.UserModel{}, "api_usage") &&
+		!s.db.Migrator().HasColumn(&model.UserModel{}, "api_limit") {
+		return nil
+	}
+	// UserModel 的配额字段已是 gorm:"-"，需用匿名结构读取旧列
+	var rows []struct {
+		ID       uint64
+		ApiUsage *model.ApiUsage
+		ApiLimit *model.ApiLimit
+	}
+	if err := s.db.Table("llm_user").
+		Select("id", "api_usage", "api_limit").
+		Scan(&rows).Error; err != nil {
+		return err
+	}
+	for _, r := range rows {
+		var count int64
+		if err := s.db.Model(&model.UserQuotaModel{}).
+			Where("user_id = ?", r.ID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			continue
+		}
+		quota := &model.UserQuotaModel{
+			UserID:   r.ID,
+			ApiUsage: r.ApiUsage,
+			ApiLimit: r.ApiLimit,
+		}
+		if quota.ApiUsage == nil {
+			quota.ApiUsage = &model.ApiUsage{DayStamp: time.Now().Format("2006-01-02")}
+		}
+		if err := s.db.Create(quota).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // loadModulesConfig 从 DB 加载模块开关；不存在则用 APP_MODULES / 默认值写入
 func (s *SetupService) loadModulesConfig() error {
 	var row model.ConfigModel
-	err := s.db.Where("`key` = ?", config.ConfigKeyModules).First(&row).Error
+	err := s.db.Where("project_id = 0 AND "+cfgPkg.QuoteIdent(s.db, "key")+" = ?", cfgPkg.ConfigKeyModules).First(&row).Error
 	if err == gorm.ErrRecordNotFound {
 		seed := ""
-		if config.AppConfig() != nil {
-			seed = config.AppConfig().Modules
+		if cfgPkg.AppConfig() != nil {
+			seed = cfgPkg.AppConfig().Modules
 		}
 		if seed == "" {
-			seed = strings.Join(config.AllModules(), ",")
+			seed = strings.Join(cfgPkg.AllModules(), ",")
 		}
-		config.SetModulesCSV(seed)
+		cfgPkg.SetModulesCSV(seed)
 		row = model.ConfigModel{
-			Key:  config.ConfigKeyModules,
-			Kind: "app",
-			Data: config.ModulesJSON(),
+			ProjectID: 0,
+			Key:       cfgPkg.ConfigKeyModules,
+			Kind:      "app",
+			Data:      cfgPkg.ModulesJSON(),
 		}
 		return s.db.Create(&row).Error
 	}
 	if err != nil {
 		return err
 	}
-	config.SetModulesCSV(row.Data)
+	cfgPkg.SetModulesCSV(row.Data)
 	return nil
 }
 
 // SaveModules 保存模块开关到 DB 并热更新内存
 func (s *SetupService) SaveModules(names []string) error {
-	config.SetModulesList(names)
-	return s.SetConfig(&model.ConfigModel{
-		Key:  config.ConfigKeyModules,
+	cfgPkg.SetModulesList(names)
+	return s.SetConfig(0, &model.ConfigModel{
+		Key:  cfgPkg.ConfigKeyModules,
 		Kind: "app",
-		Data: config.ModulesJSON(),
+		Data: cfgPkg.ModulesJSON(),
 	})
 }
 
-// initDefaultConfigs 初始化默认配置
+// initDefaultConfigs 初始化默认配置（为默认项目写入 plans）
 func (s *SetupService) initDefaultConfigs() error {
-	var creemConfig = config.GetCreemConfig()
-	var stripeConfig = config.GetStripeConfig()
+	project, err := NewProjectService().GetDefault()
+	if err != nil {
+		return err
+	}
+	return s.InitProjectConfigs(project.ID)
+}
+
+// InitProjectConfigs 为指定项目初始化默认 plans（缺失才写入）
+func (s *SetupService) InitProjectConfigs(projectID uint64) error {
+	var creemConfig = cfgPkg.GetCreemConfig()
+	var stripeConfig = cfgPkg.GetStripeConfig()
 	for _, plan := range s.GetDefaultPlan() {
 		var config model.ConfigModel
 		var key = "plan." + plan.Plan
-		var query = s.db.Where("`key` = ?", key)
+		var query = s.db.Where("project_id = ? AND "+cfgPkg.QuoteIdent(s.db, "key")+" = ?", projectID, key)
 		var err = query.First(&config).Error
 		if err != gorm.ErrRecordNotFound {
 			continue
@@ -489,13 +667,14 @@ func (s *SetupService) initDefaultConfigs() error {
 		}
 		s.setPlanByCreem(&plan, creemConfig)
 		s.setPlanByStripe(&plan, stripeConfig)
+		config.ProjectID = projectID
 		if err := s.db.Create(&config).Error; err != nil {
 			return fmt.Errorf("failed to create config %s: %v", config.Key, err)
 		}
 	}
 	return nil
 }
-func (s *SetupService) setPlanByCreem(plan *model.PlanInfo, cfg *config.Creem) {
+func (s *SetupService) setPlanByCreem(plan *model.PlanInfo, cfg *cfgPkg.Creem) {
 	if cfg == nil {
 		return
 	}
@@ -510,7 +689,7 @@ func (s *SetupService) setPlanByCreem(plan *model.PlanInfo, cfg *config.Creem) {
 		plan.Enabled = cfg.PlanSuperId != ""
 	}
 }
-func (s *SetupService) setPlanByStripe(plan *model.PlanInfo, cfg *config.Stripe) {
+func (s *SetupService) setPlanByStripe(plan *model.PlanInfo, cfg *cfgPkg.Stripe) {
 	if cfg == nil {
 		return
 	}

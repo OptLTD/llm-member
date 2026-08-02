@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/OptLTD/member/internal/config"
@@ -25,11 +26,86 @@ func (s *UserService) CreateUser(user *model.UserModel) error {
 	return s.db.Create(user).Error
 }
 
+// EnsureUserInProject 校验用户属于指定项目（0 表示不限制，兼容全局管理员）
+func (s *UserService) EnsureUserInProject(userID, projectID uint64) error {
+	if projectID == 0 {
+		return nil
+	}
+	var u model.UserModel
+	if err := s.db.Select("id", "project_id").First(&u, userID).Error; err != nil {
+		return err
+	}
+	if u.ProjectID != 0 && u.ProjectID != projectID {
+		return consts.ErrUserNotFound
+	}
+	return nil
+}
+
+// projectIDOf 根据用户 ID 查询所属项目（供内部埋点等使用）
+func projectIDOf(userID uint64) uint64 {
+	var u model.UserModel
+	if err := config.GetDB().Select("project_id").First(&u, userID).Error; err != nil {
+		return 0
+	}
+	return u.ProjectID
+}
+
+// CreateQuota 为用户创建配额记录（独立表 llm_user_quota）
+func (s *UserService) CreateQuota(userID uint64, usage *model.ApiUsage, limit *model.ApiLimit) error {
+	quota := &model.UserQuotaModel{
+		UserID:   userID,
+		ApiUsage: usage,
+		ApiLimit: limit,
+	}
+	return s.db.Create(quota).Error
+}
+
+// GetQuota 获取用户配额记录
+func (s *UserService) GetQuota(userID uint64) (*model.UserQuotaModel, error) {
+	var quota model.UserQuotaModel
+	if err := s.db.Where("user_id = ?", userID).First(&quota).Error; err != nil {
+		return nil, err
+	}
+	return &quota, nil
+}
+
+// UpdateQuotaLimit 更新用户配额限制
+func (s *UserService) UpdateQuotaLimit(userID uint64, limit *model.ApiLimit) error {
+	return s.db.Model(&model.UserQuotaModel{}).
+		Where("user_id = ?", userID).
+		Update("api_limit", limit).Error
+}
+
+// UpdateQuotaUsage 更新用户用量
+func (s *UserService) UpdateQuotaUsage(userID uint64, usage *model.ApiUsage) error {
+	return s.db.Model(&model.UserQuotaModel{}).
+		Where("user_id = ?", userID).
+		Update("api_usage", usage).Error
+}
+
+// fillQuota 将独立表的配额数据填充到 UserModel（内存字段）
+func (s *UserService) fillQuota(user *model.UserModel) error {
+	if user == nil || user.ID == 0 {
+		return nil
+	}
+	quota, err := s.GetQuota(user.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	user.ApiUsage = quota.ApiUsage
+	user.ApiLimit = quota.ApiLimit
+	return nil
+}
+
 // GetUserByAPIKey 根据 API Key 获取用户（支持 hash 存储与明文惰性迁移）
 func (s *UserService) GetUserByAPIKey(apiKey string) (*model.UserModel, error) {
 	var user model.UserModel
 	hashed := support.HashAPIKey(apiKey)
 	if err := s.db.Where("api_key = ?", hashed).First(&user).Error; err == nil {
+		_ = s.fillQuota(&user)
 		return &user, nil
 	}
 	// 兼容旧明文 key，命中后迁移为 hash
@@ -40,6 +116,7 @@ func (s *UserService) GetUserByAPIKey(apiKey string) (*model.UserModel, error) {
 		_ = s.db.Model(&user).Update("api_key", hashed).Error
 		user.APIKey = hashed
 	}
+	_ = s.fillQuota(&user)
 	return &user, nil
 }
 
@@ -49,6 +126,7 @@ func (s *UserService) GetUserByUsername(username string) (*model.UserModel, erro
 	if err := s.db.Where("username = ?", username).First(&user).Error; err != nil {
 		return nil, err
 	}
+	_ = s.fillQuota(&user)
 	return &user, nil
 }
 
@@ -58,6 +136,7 @@ func (s *UserService) GetUserByEmail(email string) (*model.UserModel, error) {
 	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
 		return nil, err
 	}
+	_ = s.fillQuota(&user)
 	return &user, nil
 }
 
@@ -67,6 +146,7 @@ func (s *UserService) GetUserByPhone(phone string) (*model.UserModel, error) {
 	if err := s.db.Where("phone = ?", phone).First(&user).Error; err != nil {
 		return nil, err
 	}
+	_ = s.fillQuota(&user)
 	return &user, nil
 }
 
@@ -146,6 +226,7 @@ func (s *UserService) GetUserByID(userID uint64) (*model.UserModel, error) {
 	}
 	user.Password = ""
 	user.APIKey = ""
+	_ = s.fillQuota(&user)
 	return &user, nil
 }
 
@@ -184,13 +265,17 @@ func (s *UserService) ToggleUserStatus(userID uint, isActive bool) error {
 	return nil
 }
 
-// GetAllOrders 获取用户订单列表
-func (s *UserService) QueryUsers(req *model.PaginateRequest) (*model.PaginateResponse, error) {
+// GetAllOrders 获取用户订单列表（按项目过滤）
+func (s *UserService) QueryUsers(req *model.PaginateRequest, projectID uint64) (*model.PaginateResponse, error) {
 	var total int64
 	var users []model.UserModel
 
 	query := s.db.Model(&model.UserModel{})
-	query.Where(req.Query).Order("created_at DESC")
+	query.Where(req.Query)
+	if projectID > 0 {
+		query = query.Where("project_id = ?", projectID)
+	}
+	query = query.Order("created_at DESC")
 	if err := query.Count(&total).Error; err != nil {
 		return nil, err
 	}
@@ -202,10 +287,27 @@ func (s *UserService) QueryUsers(req *model.PaginateRequest) (*model.PaginateRes
 		return nil, err
 	}
 
-	// 清除密码与 API Key hash
+	// 清除密码与 API Key hash，并批量填充配额
+	var ids []uint64
 	for i := range users {
 		users[i].Password = ""
 		users[i].APIKey = ""
+		ids = append(ids, users[i].ID)
+	}
+	if len(ids) > 0 {
+		var quotas []model.UserQuotaModel
+		if err := s.db.Where("user_id IN ?", ids).Find(&quotas).Error; err == nil {
+			m := make(map[uint64]*model.UserQuotaModel, len(quotas))
+			for i := range quotas {
+				m[quotas[i].UserID] = &quotas[i]
+			}
+			for i := range users {
+				if q, ok := m[users[i].ID]; ok {
+					users[i].ApiUsage = q.ApiUsage
+					users[i].ApiLimit = q.ApiLimit
+				}
+			}
+		}
 	}
 
 	// 构造响应

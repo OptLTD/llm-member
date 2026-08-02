@@ -17,17 +17,16 @@ func NewLogService() *LogService {
 	}
 }
 
-func (s *LogService) CreateLog(log *model.LlmLogModel) error {
-	return s.db.Create(log).Error
-}
-
-// GetLogs 获取带筛选条件的日志
-func (s *LogService) GetLogs(req *model.PaginateRequest) (*model.PaginateResponse, error) {
+// GetLogs 获取带筛选条件的日志（按项目过滤）
+func (s *LogService) GetLogs(req *model.PaginateRequest, projectID uint64) (*model.PaginateResponse, error) {
 	var total int64
 	var logs []model.LlmLogModel
 
 	// 构建查询条件
 	query := s.db.Model(&model.LlmLogModel{})
+	if projectID > 0 {
+		query = query.Where("project_id = ?", projectID)
+	}
 	if status, ok := req.Query["status"]; ok && status != "" {
 		query = query.Where("status = ?", status)
 	}

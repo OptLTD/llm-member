@@ -11,6 +11,7 @@ type DeviceModel struct {
 	ID uint64 `json:"id" gorm:"primarykey"`
 
 	UserID     uint64    `json:"userId" gorm:"column:user_id;index;not null"`
+	ProjectID  uint64    `json:"projectId" gorm:"column:project_id;index;not null;default:0"`
 	DeviceID   string    `json:"deviceId" gorm:"column:device_id;type:varchar(128);index;not null"`
 	DeviceName string    `json:"deviceName" gorm:"column:device_name;type:varchar(256)"`
 	Platform   string    `json:"platform" gorm:"column:platform;type:varchar(64)"`

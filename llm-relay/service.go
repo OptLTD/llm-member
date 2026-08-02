@@ -1,7 +1,8 @@
-package service
+package relay
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -10,11 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OptLTD/member/internal/config"
-	"github.com/OptLTD/member/internal/consts"
-	"github.com/OptLTD/member/internal/model"
-
 	"github.com/sashabaranov/go-openai"
+)
+
+var (
+	// ErrProviderNotConfigured 上游未配置
+	ErrProviderNotConfigured = errors.New("provider not configured")
+	// ErrUnsupportedModel 不支持的模型
+	ErrUnsupportedModel = errors.New("unsupported model")
 )
 
 // APIConfig 通用 API 配置（统一 OpenAI-compatible）
@@ -25,10 +29,23 @@ type APIConfig struct {
 	ReqModel string
 }
 
-type RelayService struct{}
+// Service LLM 中继服务，负责转发 OpenAI-compatible 请求。
+type Service struct {
+	getConfig func() *LLMConfig
+}
 
-func NewRelayService() *RelayService {
-	return &RelayService{}
+// NewService 创建中继服务；getConfig 返回当前上游配置（例如按项目动态解析），为空时使用环境变量。
+func NewService(getConfig func() *LLMConfig) *Service {
+	if getConfig == nil {
+		getConfig = ConfigFromEnv
+	}
+	return &Service{getConfig: getConfig}
+}
+
+// WithConfig 返回一个使用固定配置的 Service 副本（不修改原实例，并发安全）。
+// 适用于按请求解析上游配置的场景。
+func (s *Service) WithConfig(cfg *LLMConfig) *Service {
+	return &Service{getConfig: func() *LLMConfig { return cfg }}
 }
 
 // 共享 HTTP 客户端，复用连接
@@ -49,7 +66,8 @@ var sharedHTTPClient = &http.Client{
 	},
 }
 
-func (s *RelayService) ChatCompletions(ctx context.Context, req *model.ChatRequest) (*model.ChatResponse, error) {
+// ChatCompletions 非流式聊天完成
+func (s *Service) ChatCompletions(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
 	apiConfig, err := s.GetAPIConfig(req.Model)
 	if err != nil {
 		return nil, err
@@ -61,8 +79,8 @@ func (s *RelayService) ChatCompletions(ctx context.Context, req *model.ChatReque
 }
 
 // ChatCompletionsStream 流式聊天完成
-func (s *RelayService) ChatCompletionsStream(ctx context.Context, req *model.ChatRequest) (<-chan *model.ChatStreamResponse, <-chan error) {
-	respChan := make(chan *model.ChatStreamResponse, 100)
+func (s *Service) ChatCompletionsStream(ctx context.Context, req *ChatRequest) (<-chan *ChatStreamResponse, <-chan error) {
+	respChan := make(chan *ChatStreamResponse, 100)
 	errorChan := make(chan error, 1)
 
 	go func() {
@@ -90,15 +108,16 @@ func isNativeNonCompatibleURL(baseURL string) bool {
 		strings.Contains(u, "generativelanguage.googleapis.com")
 }
 
-func (s *RelayService) GetAPIConfig(modelName string) (*APIConfig, error) {
-	llm := config.GetLLM()
+// GetAPIConfig 根据模型名解析上游配置
+func (s *Service) GetAPIConfig(modelName string) (*APIConfig, error) {
+	llm := s.getConfig()
 	if llm == nil {
-		return nil, consts.ErrProviderNotConfigured
+		return nil, ErrProviderNotConfigured
 	}
 	if isNativeNonCompatibleURL(llm.BaseURL) {
 		return nil, fmt.Errorf(
 			"%w: LLM_BASE_URL %q is not OpenAI-compatible; use a compatible gateway",
-			consts.ErrProviderNotConfigured, llm.BaseURL,
+			ErrProviderNotConfigured, llm.BaseURL,
 		)
 	}
 
@@ -109,7 +128,7 @@ func (s *RelayService) GetAPIConfig(modelName string) (*APIConfig, error) {
 			reqModel = llm.Models[0]
 		}
 		if reqModel == "" {
-			return nil, fmt.Errorf("%w: set LLM_DEFAULT_MODEL or pass model in request", consts.ErrUnsupportedModel)
+			return nil, fmt.Errorf("%w: set LLM_DEFAULT_MODEL or pass model in request", ErrUnsupportedModel)
 		}
 	}
 
@@ -121,14 +140,15 @@ func (s *RelayService) GetAPIConfig(modelName string) (*APIConfig, error) {
 	}, nil
 }
 
-func (s *RelayService) GetModels() []model.LLModelInfo {
-	llm := config.GetLLM()
+// GetModels 返回对外暴露的模型列表
+func (s *Service) GetModels() []LLModelInfo {
+	llm := s.getConfig()
 	if llm == nil {
 		return nil
 	}
-	out := make([]model.LLModelInfo, 0, len(llm.Models))
+	out := make([]LLModelInfo, 0, len(llm.Models))
 	for _, id := range llm.Models {
-		out = append(out, model.LLModelInfo{
+		out = append(out, LLModelInfo{
 			ID: id, Object: "model", Provider: llm.Provider, Name: id,
 		})
 	}
@@ -136,15 +156,15 @@ func (s *RelayService) GetModels() []model.LLModelInfo {
 }
 
 // GetProvider 返回当前上游标签（单一配置，与 model 无关）
-func (s *RelayService) GetProvider(modelName string) string {
+func (s *Service) GetProvider(modelName string) string {
 	_ = modelName
-	if llm := config.GetLLM(); llm != nil {
+	if llm := s.getConfig(); llm != nil {
 		return llm.Provider
 	}
 	return "unknown"
 }
 
-func (s *RelayService) callWithClient(ctx context.Context, req *model.ChatRequest, apiConfig *APIConfig) (*model.ChatResponse, error) {
+func (s *Service) callWithClient(ctx context.Context, req *ChatRequest, apiConfig *APIConfig) (*ChatResponse, error) {
 	log.Printf("[LLM] model=%s base=%s", req.Model, apiConfig.BaseURL)
 
 	cfg := openai.DefaultConfig(apiConfig.APIKey)
@@ -179,11 +199,11 @@ func (s *RelayService) callWithClient(ctx context.Context, req *model.ChatReques
 		return nil, err
 	}
 
-	var choices []model.ChatChoice
+	var choices []ChatChoice
 	for i, choice := range resp.Choices {
-		choices = append(choices, model.ChatChoice{
+		choices = append(choices, ChatChoice{
 			Index: i,
-			Message: model.ChatMessage{
+			Message: ChatMessage{
 				Role:    choice.Message.Role,
 				Content: choice.Message.Content,
 			},
@@ -191,13 +211,13 @@ func (s *RelayService) callWithClient(ctx context.Context, req *model.ChatReques
 		})
 	}
 
-	return &model.ChatResponse{
+	return &ChatResponse{
 		ID:      resp.ID,
 		Object:  resp.Object,
 		Created: resp.Created,
 		Model:   resp.Model,
 		Choices: choices,
-		Usage: model.Usage{
+		Usage: Usage{
 			PromptTokens:     resp.Usage.PromptTokens,
 			CompletionTokens: resp.Usage.CompletionTokens,
 			TotalTokens:      resp.Usage.TotalTokens,
@@ -205,7 +225,7 @@ func (s *RelayService) callWithClient(ctx context.Context, req *model.ChatReques
 	}, nil
 }
 
-func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequest, apiConfig *APIConfig, responseChan chan<- *model.ChatStreamResponse, errorChan chan<- error) {
+func (s *Service) streamWithClient(ctx context.Context, req *ChatRequest, apiConfig *APIConfig, responseChan chan<- *ChatStreamResponse, errorChan chan<- error) {
 	log.Printf("[LLM] stream model=%s base=%s", req.Model, apiConfig.BaseURL)
 
 	cfg := openai.DefaultConfig(apiConfig.APIKey)
@@ -257,7 +277,7 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 			return
 		}
 
-		streamResp := &model.ChatStreamResponse{
+		streamResp := &ChatStreamResponse{
 			ID:      response.ID,
 			Object:  response.Object,
 			Created: response.Created,
@@ -265,7 +285,7 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 		}
 
 		if response.Usage != nil {
-			streamResp.Usage = &model.Usage{
+			streamResp.Usage = &Usage{
 				PromptTokens:     response.Usage.PromptTokens,
 				CompletionTokens: response.Usage.CompletionTokens,
 				TotalTokens:      response.Usage.TotalTokens,
@@ -278,9 +298,9 @@ func (s *RelayService) streamWithClient(ctx context.Context, req *model.ChatRequ
 				reason := string(choice.FinishReason)
 				finishReason = &reason
 			}
-			streamResp.Choices = append(streamResp.Choices, model.ChatStreamChoice{
+			streamResp.Choices = append(streamResp.Choices, ChatStreamChoice{
 				Index: i, FinishReason: finishReason,
-				Delta: model.ChatStreamDelta{
+				Delta: ChatStreamDelta{
 					Role:    choice.Delta.Role,
 					Content: choice.Delta.Content,
 				},

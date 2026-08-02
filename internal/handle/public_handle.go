@@ -2,15 +2,15 @@ package handle
 
 import (
 	"embed"
+	"github.com/OptLTD/member/internal/config"
+	"github.com/OptLTD/member/internal/model"
+	"github.com/OptLTD/member/internal/service"
 	"html/template"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
-	"github.com/OptLTD/member/internal/config"
-	"github.com/OptLTD/member/internal/model"
-	"github.com/OptLTD/member/internal/service"
 
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
@@ -30,7 +30,7 @@ func NewPublicHandler() *PublicHandle {
 
 // GetPricingPlans 获取定价方案
 func (h *PublicHandle) GetPricingPlans(c *gin.Context) {
-	plans := h.setupService.GetEnablePlans()
+	plans := h.setupService.GetEnablePlans(service.ProjectID(c))
 	c.JSON(http.StatusOK, gin.H{
 		"plans": plans,
 	})
@@ -50,7 +50,7 @@ func (h *PublicHandle) DoPaymentCallback(c *gin.Context) {
 		return
 	}
 	var limit *model.ApiLimit
-	if limit, err = h.setupService.GetPlanLimit(order.PayPlan); err != nil {
+	if limit, err = h.setupService.GetPlanLimit(order.ProjectID, order.PayPlan); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

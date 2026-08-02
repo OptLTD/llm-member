@@ -22,7 +22,7 @@ func NewSetupHandler() *SetupHandler {
 
 // GetPricingPlans 获取付费方案列表（管理员）
 func (h *SetupHandler) GetPricingPlans(c *gin.Context) {
-	plans := h.setupService.GetAllPlans()
+	plans := h.setupService.GetAllPlans(service.ProjectID(c))
 	c.JSON(http.StatusOK, gin.H{
 		"plans": plans,
 	})
@@ -55,7 +55,7 @@ func (h *SetupHandler) SetPricingPlan(c *gin.Context) {
 		config.Data = string(data)
 	}
 
-	if err := h.setupService.SetConfig(config); err != nil {
+	if err := h.setupService.SetConfig(service.ProjectID(c), config); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update plan config"})
 		return
 	}

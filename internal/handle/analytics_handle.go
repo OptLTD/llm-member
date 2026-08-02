@@ -25,7 +25,7 @@ func (h *AnalyticsHandle) Track(c *gin.Context) {
 		return
 	}
 	userID := c.GetUint64("UserID")
-	if err := h.svc.Track(&req, userID, c.ClientIP()); err != nil {
+	if err := h.svc.Track(service.ProjectID(c), &req, userID, c.ClientIP()); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -33,7 +33,7 @@ func (h *AnalyticsHandle) Track(c *gin.Context) {
 }
 
 func (h *AnalyticsHandle) ListSites(c *gin.Context) {
-	sites, err := h.svc.ListSites()
+	sites, err := h.svc.ListSites(service.ProjectID(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -50,6 +50,7 @@ func (h *AnalyticsHandle) CreateSite(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	site.ProjectID = service.ProjectID(c)
 	if err := h.svc.CreateSite(&site); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -74,7 +75,7 @@ func (h *AnalyticsHandle) UpdateSite(c *gin.Context) {
 
 func (h *AnalyticsHandle) Overview(c *gin.Context) {
 	siteID, _ := strconv.ParseUint(c.DefaultQuery("siteId", "0"), 10, 64)
-	data, err := h.svc.Overview(siteID)
+	data, err := h.svc.Overview(service.ProjectID(c), siteID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -86,7 +87,7 @@ func (h *AnalyticsHandle) ListEvents(c *gin.Context) {
 	siteID, _ := strconv.ParseUint(c.DefaultQuery("siteId", "0"), 10, 64)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
-	events, total, err := h.svc.ListEvents(siteID, page, size)
+	events, total, err := h.svc.ListEvents(service.ProjectID(c), siteID, page, size)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

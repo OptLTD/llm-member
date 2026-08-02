@@ -15,8 +15,9 @@ func NewFeedbackService() *FeedbackService {
 	return &FeedbackService{db: config.GetDB()}
 }
 
-func (s *FeedbackService) Submit(userID uint64, req *model.SubmitFeedbackRequest) (*model.FeedbackModel, error) {
+func (s *FeedbackService) Submit(projectID, userID uint64, req *model.SubmitFeedbackRequest) (*model.FeedbackModel, error) {
 	fb := &model.FeedbackModel{
+		ProjectID:  projectID,
 		UserID:     userID,
 		Type:       req.Type,
 		Title:      req.Title,
@@ -30,14 +31,14 @@ func (s *FeedbackService) Submit(userID uint64, req *model.SubmitFeedbackRequest
 		return nil, err
 	}
 	if config.HasModule(config.ModuleAnalytics) {
-		_ = NewAnalyticsService().TrackInternal(userID, "feedback.submit", map[string]any{
+		_ = NewAnalyticsService().TrackInternal(projectID, userID, "feedback.submit", map[string]any{
 			"type": req.Type,
 		})
 	}
 	return fb, nil
 }
 
-func (s *FeedbackService) List(status string, page, size int) ([]model.FeedbackModel, int64, error) {
+func (s *FeedbackService) List(projectID uint64, status string, page, size int) ([]model.FeedbackModel, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -47,6 +48,9 @@ func (s *FeedbackService) List(status string, page, size int) ([]model.FeedbackM
 	var total int64
 	var list []model.FeedbackModel
 	q := s.db.Model(&model.FeedbackModel{})
+	if projectID > 0 {
+		q = q.Where("project_id = ?", projectID)
+	}
 	if status != "" {
 		q = q.Where("status = ?", status)
 	}
@@ -55,9 +59,9 @@ func (s *FeedbackService) List(status string, page, size int) ([]model.FeedbackM
 	return list, total, err
 }
 
-func (s *FeedbackService) Update(id uint64, req *model.UpdateFeedbackRequest) (*model.FeedbackModel, error) {
+func (s *FeedbackService) Update(projectID, id uint64, req *model.UpdateFeedbackRequest) (*model.FeedbackModel, error) {
 	var fb model.FeedbackModel
-	if err := s.db.First(&fb, id).Error; err != nil {
+	if err := s.db.Where("project_id = ? AND id = ?", projectID, id).First(&fb).Error; err != nil {
 		return nil, err
 	}
 	if req.Status != nil {
@@ -72,12 +76,19 @@ func (s *FeedbackService) Update(id uint64, req *model.UpdateFeedbackRequest) (*
 	return &fb, nil
 }
 
-func (s *FeedbackService) Summary() (map[string]any, error) {
+func (s *FeedbackService) Summary(projectID uint64) (map[string]any, error) {
 	var open, closed int64
 	var avgRating float64
-	s.db.Model(&model.FeedbackModel{}).Where("status = ?", model.FeedbackStatusOpen).Count(&open)
-	s.db.Model(&model.FeedbackModel{}).Where("status = ?", model.FeedbackStatusClosed).Count(&closed)
-	s.db.Model(&model.FeedbackModel{}).Where("rating > 0").Select("COALESCE(AVG(rating),0)").Scan(&avgRating)
+	scoped := func() *gorm.DB {
+		q := s.db.Model(&model.FeedbackModel{})
+		if projectID > 0 {
+			q = q.Where("project_id = ?", projectID)
+		}
+		return q
+	}
+	scoped().Where("status = ?", model.FeedbackStatusOpen).Count(&open)
+	scoped().Where("status = ?", model.FeedbackStatusClosed).Count(&closed)
+	scoped().Where("rating > 0").Select("COALESCE(AVG(rating),0)").Scan(&avgRating)
 	return map[string]any{
 		"open":      open,
 		"closed":    closed,
